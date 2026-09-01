@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: shortener
+
+  # PostgreSQL database connection configuration
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: postgres
+    # To avoid exposing the password directly: # If the DB_PASSWORD environment variable exists, it will be used. # Otherwise, it defaults to '123456' (the value after the colon).
+    password: ${DB_PASSWORD:123456}
+    driver-class-name: org.postgresql.Driver
+
+  # Hibernate (JPA) configuration
+  jpa:
+    hibernate:
+      # 'update' automatically updates the database schema when the Entity changes
+      ddl-auto: update
+    show-sql: true # Print SQL statements to the console for easier debugging
+    properties:
+      hibernate:
+        format_sql: true # Format SQL statements for better readability
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+# Application server port configuration (default: 8080)
+server:
+  port: 8080
