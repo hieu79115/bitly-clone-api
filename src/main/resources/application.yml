@@ -4,7 +4,7 @@ spring:
 
   # PostgreSQL database connection configuration
   datasource:
-    url: jdbc:postgresql://localhost:5432/postgres
+    url: jdbc:postgresql://localhost:5432/bitly_clone
     username: postgres
     # To avoid exposing the password directly: # If the DB_PASSWORD environment variable exists, it will be used. # Otherwise, it defaults to '123456' (the value after the colon).
     password: ${DB_PASSWORD:123456}
@@ -24,3 +24,10 @@ spring:
 # Application server port configuration (default: 8080)
 server:
   port: 8080
+
+app:
+  jwt:
+    # Secret Key
+    secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+    # 604800000 ms = 7 days
+    expiration: 604800000
