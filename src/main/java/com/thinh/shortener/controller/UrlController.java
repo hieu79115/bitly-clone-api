@@ -1,0 +1,70 @@
+package com.thinh.shortener.controller;
+
+import com.thinh.shortener.domain.dto.request.CreateUrlRequestDto;
+import com.thinh.shortener.domain.dto.request.UpdateUrlRequestDto;
+import com.thinh.shortener.domain.dto.response.UrlResponseDto;
+import com.thinh.shortener.service.UrlService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.net.URI;
+import java.security.Principal;
+import java.util.List;
+
+@RestController
+@RequiredArgsConstructor
+public class UrlController {
+
+    private final UrlService urlService;
+
+    @PostMapping("/api/v1/urls")
+    public ResponseEntity<UrlResponseDto> createUrl(@Valid @RequestBody CreateUrlRequestDto request, Principal principal) {
+        // The principal object is automatically injected by Spring Security after successful token authentication.
+        // principal.getName() corresponds to the email address we embedded in the token during login.
+        UrlResponseDto response = urlService.createShortUrl(request, principal.getName());
+        return new ResponseEntity<>(response, HttpStatus.CREATED);
+    }
+
+    @GetMapping("/{shortCode}")
+    public ResponseEntity<Void> redirectToOriginalUrl(@PathVariable String shortCode) {
+        String originalUrl = urlService.getOriginalUrl(shortCode);
+        // Return HTTP Status 302 (FOUND) to instruct the browser to automatically redirect to the original page.
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .location(URI.create(originalUrl))
+                .build();
+    }
+
+    @GetMapping("/api/v1/urls")
+    public ResponseEntity<List<UrlResponseDto>> getUserUrls(Principal principal){
+        List<UrlResponseDto> response = urlService.getUserUrls(principal.getName());
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/api/v1/urls/{id}")
+    public ResponseEntity<UrlResponseDto> updateUrl(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateUrlRequestDto request,
+            Principal principal
+    ) {
+        UrlResponseDto response = urlService.updateUrl(id, request, principal.getName());
+        return ResponseEntity.ok(response);
+    }
+
+    @DeleteMapping("/api/v1/urls/{id}")
+    public ResponseEntity<Void> deleteUrl(
+            @PathVariable Long id,
+            Principal principal
+    ) {
+        urlService.deleteUrl(id, principal.getName());
+        return ResponseEntity.noContent().build();
+    }
+}

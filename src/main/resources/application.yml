@@ -31,3 +31,7 @@ app:
     secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
     # 604800000 ms = 7 days
     expiration: 604800000
+
+springdoc:
+  swagger-ui:
+    persist-authorization: true

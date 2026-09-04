@@ -44,7 +44,7 @@ public class SecurityConfig {
                         // Allow access to Sign-up / Log-in APIs
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         // Allow access to the shortened link redirection API
-                        .requestMatchers("/{shortCode:[a-zA-Z0-9]+}").permitAll()
+                        .requestMatchers("/{shortCode:[a-zA-Z0-9_-]+}").permitAll()
                         // Allow access to Swagger UI for documentation viewing
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // All remaining APIs MUST have a valid token.
