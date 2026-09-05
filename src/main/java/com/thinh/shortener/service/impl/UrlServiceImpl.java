@@ -13,6 +13,7 @@ import com.thinh.shortener.repository.UrlRepository;
 import com.thinh.shortener.repository.UserRepository;
 import com.thinh.shortener.service.UrlService;
 import com.thinh.shortener.util.Base62Encoder;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -136,7 +137,7 @@ public class UrlServiceImpl implements UrlService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         Url url = urlRepository.findByIdAndUserId(id, user.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("URL not found or you do not have permission to delete it"));
+                .orElseThrow(() -> new AccessDeniedException("You do not have permission to delete this URL"));
 
         urlRepository.delete(url);
     }

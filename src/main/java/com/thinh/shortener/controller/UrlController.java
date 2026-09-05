@@ -3,7 +3,9 @@ package com.thinh.shortener.controller;
 import com.thinh.shortener.domain.dto.request.CreateUrlRequestDto;
 import com.thinh.shortener.domain.dto.request.UpdateUrlRequestDto;
 import com.thinh.shortener.domain.dto.response.UrlResponseDto;
+import com.thinh.shortener.service.AnalyticsService;
 import com.thinh.shortener.service.UrlService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -25,6 +27,7 @@ import java.util.List;
 public class UrlController {
 
     private final UrlService urlService;
+    private final AnalyticsService analyticsService;
 
     @PostMapping("/api/v1/urls")
     public ResponseEntity<UrlResponseDto> createUrl(@Valid @RequestBody CreateUrlRequestDto request, Principal principal) {
@@ -35,8 +38,9 @@ public class UrlController {
     }
 
     @GetMapping("/{shortCode}")
-    public ResponseEntity<Void> redirectToOriginalUrl(@PathVariable String shortCode) {
+    public ResponseEntity<Void> redirectToOriginalUrl(@PathVariable String shortCode, HttpServletRequest request) {
         String originalUrl = urlService.getOriginalUrl(shortCode);
+        analyticsService.recordClick(shortCode, request);
         // Return HTTP Status 302 (FOUND) to instruct the browser to automatically redirect to the original page.
         return ResponseEntity.status(HttpStatus.FOUND)
                 .location(URI.create(originalUrl))
