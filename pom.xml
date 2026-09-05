@@ -88,6 +88,13 @@
 			<version>2.8.6</version>
 		</dependency>
 
+		<!-- 5. Analytics User-Agent -->
+		<dependency>
+			<groupId>com.github.ua-parser</groupId>
+			<artifactId>uap-java</artifactId>
+			<version>1.6.1</version>
+		</dependency>
+
 		<!-- TEST LIBRARIES -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

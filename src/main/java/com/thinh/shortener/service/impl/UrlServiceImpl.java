@@ -13,6 +13,8 @@ import com.thinh.shortener.repository.UrlRepository;
 import com.thinh.shortener.repository.UserRepository;
 import com.thinh.shortener.service.UrlService;
 import com.thinh.shortener.util.Base62Encoder;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -104,15 +106,13 @@ public class UrlServiceImpl implements UrlService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<UrlResponseDto> getUserUrls(String email) {
+    public Page<UrlResponseDto> getUserUrls(String email, Pageable pageable) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        List<Url> urls = urlRepository.findByUserId(user.getId());
+        Page<Url> urlPage = urlRepository.findByUserId(user.getId(), pageable);
 
-        return urls.stream()
-                .map(url -> urlMapper.toDto(url, domain))
-                .toList();
+        return urlPage.map(url -> urlMapper.toDto(url, domain));
     }
 
     @Override

@@ -5,9 +5,15 @@ import com.thinh.shortener.domain.dto.request.UpdateUrlRequestDto;
 import com.thinh.shortener.domain.dto.response.UrlResponseDto;
 import com.thinh.shortener.service.AnalyticsService;
 import com.thinh.shortener.service.UrlService;
+import com.thinh.shortener.util.IpAddressUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -28,6 +34,7 @@ public class UrlController {
 
     private final UrlService urlService;
     private final AnalyticsService analyticsService;
+    private final IpAddressUtil ipAddressUtil;
 
     @PostMapping("/api/v1/urls")
     public ResponseEntity<UrlResponseDto> createUrl(@Valid @RequestBody CreateUrlRequestDto request, Principal principal) {
@@ -40,7 +47,13 @@ public class UrlController {
     @GetMapping("/{shortCode}")
     public ResponseEntity<Void> redirectToOriginalUrl(@PathVariable String shortCode, HttpServletRequest request) {
         String originalUrl = urlService.getOriginalUrl(shortCode);
-        analyticsService.recordClick(shortCode, request);
+
+        String ipAddress = ipAddressUtil.getClientIp(request);
+        String userAgent = request.getHeader("User-Agent");
+        String referer = request.getHeader("Referer");
+
+        analyticsService.recordClick(shortCode, ipAddress, userAgent, referer);
+
         // Return HTTP Status 302 (FOUND) to instruct the browser to automatically redirect to the original page.
         return ResponseEntity.status(HttpStatus.FOUND)
                 .location(URI.create(originalUrl))
@@ -48,8 +61,11 @@ public class UrlController {
     }
 
     @GetMapping("/api/v1/urls")
-    public ResponseEntity<List<UrlResponseDto>> getUserUrls(Principal principal){
-        List<UrlResponseDto> response = urlService.getUserUrls(principal.getName());
+    public ResponseEntity<Page<UrlResponseDto>> getUserUrls(
+            @ParameterObject  @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            Principal principal
+    ) {
+        Page<UrlResponseDto> response = urlService.getUserUrls(principal.getName(), pageable);
         return ResponseEntity.ok(response);
     }
 
