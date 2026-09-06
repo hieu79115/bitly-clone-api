@@ -16,13 +16,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
 import java.security.Principal;
@@ -62,10 +56,11 @@ public class UrlController {
 
     @GetMapping("/api/v1/urls")
     public ResponseEntity<Page<UrlResponseDto>> getUserUrls(
-            @ParameterObject  @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            @RequestParam(required = false) Long tagId,
+            @ParameterObject @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
             Principal principal
     ) {
-        Page<UrlResponseDto> response = urlService.getUserUrls(principal.getName(), pageable);
+        Page<UrlResponseDto> response = urlService.getUserUrls(principal.getName(), tagId, pageable);
         return ResponseEntity.ok(response);
     }
 

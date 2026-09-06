@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 
 @Data
 @Builder
@@ -15,4 +16,5 @@ public class UrlResponseDto {
     private Integer clickCount;
     private LocalDateTime expiresAt;
     private LocalDateTime createdAt;
+    private Set<TagResponseDto> tags;
 }

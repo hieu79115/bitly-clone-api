@@ -6,5 +6,6 @@ import com.thinh.shortener.domain.dto.response.AuthResponseDto;
 
 public interface AuthService {
     void register(RegisterRequestDto request);
+
     AuthResponseDto login(LoginRequestDto request);
 }

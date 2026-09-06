@@ -3,12 +3,14 @@ package com.thinh.shortener.service.impl;
 import com.thinh.shortener.domain.dto.request.CreateUrlRequestDto;
 import com.thinh.shortener.domain.dto.request.UpdateUrlRequestDto;
 import com.thinh.shortener.domain.dto.response.UrlResponseDto;
+import com.thinh.shortener.domain.entity.Tag;
 import com.thinh.shortener.domain.entity.Url;
 import com.thinh.shortener.domain.entity.User;
 import com.thinh.shortener.domain.mapper.UrlMapper;
 import com.thinh.shortener.exception.AliasAlreadyExistsException;
 import com.thinh.shortener.exception.ResourceNotFoundException;
 import com.thinh.shortener.exception.UrlExpiredException;
+import com.thinh.shortener.repository.TagRepository;
 import com.thinh.shortener.repository.UrlRepository;
 import com.thinh.shortener.repository.UserRepository;
 import com.thinh.shortener.service.UrlService;
@@ -23,7 +25,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -34,6 +38,7 @@ public class UrlServiceImpl implements UrlService {
     private final UserRepository userRepository;
     private final Base62Encoder base62Encoder;
     private final UrlMapper urlMapper;
+    private final TagRepository tagRepository;
 
     // Get the domain from the configuration file; defaults to localhost:8080/
     @Value("${app.domain:http://localhost:8080/}")
@@ -44,6 +49,11 @@ public class UrlServiceImpl implements UrlService {
     public UrlResponseDto createShortUrl(CreateUrlRequestDto request, String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        Set<Tag> tags = new HashSet<>();
+        if (request.getTagIds() != null && !request.getTagIds().isEmpty()) {
+            tags = tagRepository.findByIdInAndUserId(request.getTagIds(), user.getId());
+        }
 
         String shortCode = request.getCustomAlias();
 
@@ -58,6 +68,7 @@ public class UrlServiceImpl implements UrlService {
                     .shortCode(shortCode)
                     .expiresAt(request.getExpiresAt())
                     .user(user)
+                    .tags(tags)
                     .build();
 
             url = urlRepository.save(url);
@@ -75,6 +86,7 @@ public class UrlServiceImpl implements UrlService {
                 .shortCode("tmp_" + UUID.randomUUID().toString().substring(0, 8))
                 .expiresAt(request.getExpiresAt())
                 .user(user)
+                .tags(tags)
                 .build();
         url = urlRepository.save(url); // 1st attempt: Save to get the ID
 
@@ -106,11 +118,16 @@ public class UrlServiceImpl implements UrlService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<UrlResponseDto> getUserUrls(String email, Pageable pageable) {
+    public Page<UrlResponseDto> getUserUrls(String email, Long tagId, Pageable pageable) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        Page<Url> urlPage = urlRepository.findByUserId(user.getId(), pageable);
+        Page<Url> urlPage;
+        if (tagId != null) {
+            urlPage = urlRepository.findByUserIdAndTagId(user.getId(), tagId, pageable);
+        } else {
+            urlPage = urlRepository.findByUserId(user.getId(), pageable);
+        }
 
         return urlPage.map(url -> urlMapper.toDto(url, domain));
     }
@@ -124,9 +141,19 @@ public class UrlServiceImpl implements UrlService {
         Url url = urlRepository.findByIdAndUserId(id, user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("URL not found or you do not have permission to update it"));
 
-        url.setExpiresAt(request.getExpiresAt());
-        url = urlRepository.save(url);
+        if (request.getExpiresAt() != null) {
+            url.setExpiresAt(request.getExpiresAt());
+        }
 
+        if (request.getTagIds() != null) {
+            url.getTags().clear();
+            if (!request.getTagIds().isEmpty()) {
+                Set<Tag> tags = tagRepository.findByIdInAndUserId(request.getTagIds(), user.getId());
+                url.getTags().addAll(tags);
+            }
+        }
+
+        url = urlRepository.save(url);
         return urlMapper.toDto(url, domain);
     }
 

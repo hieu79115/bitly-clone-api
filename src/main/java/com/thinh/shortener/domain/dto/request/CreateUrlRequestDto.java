@@ -7,6 +7,7 @@ import lombok.Data;
 import org.hibernate.validator.constraints.URL;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 
 @Data
 public class CreateUrlRequestDto {
@@ -19,4 +20,6 @@ public class CreateUrlRequestDto {
 
     @Future(message = "Expiration time must be in the future")
     private LocalDateTime expiresAt;
+
+    private Set<Long> tagIds;
 }

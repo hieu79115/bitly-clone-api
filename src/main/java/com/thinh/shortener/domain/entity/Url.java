@@ -8,7 +8,9 @@ import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Entity
 @Table(name = "urls")
@@ -56,4 +58,16 @@ public class Url {
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     private List<ClickAnalytics> clickAnalytics;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "url_tags",
+            joinColumns = @JoinColumn(name = "url_id"),
+            inverseJoinColumns = @JoinColumn(name = "tag_id")
+    )
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @Builder.Default
+    private Set<Tag> tags = new HashSet<>();
+
 }

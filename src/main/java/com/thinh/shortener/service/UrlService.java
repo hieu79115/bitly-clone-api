@@ -10,8 +10,12 @@ import java.util.List;
 
 public interface UrlService {
     UrlResponseDto createShortUrl(CreateUrlRequestDto request, String email);
+
     String getOriginalUrl(String shortCode);
-    Page<UrlResponseDto> getUserUrls(String email, Pageable pageable);
+
+    Page<UrlResponseDto> getUserUrls(String email, Long tagId, Pageable pageable);
+
     UrlResponseDto updateUrl(Long id, UpdateUrlRequestDto request, String email);
+
     void deleteUrl(Long id, String email);
 }
