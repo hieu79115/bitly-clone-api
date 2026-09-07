@@ -21,4 +21,9 @@ public interface UrlRepository extends JpaRepository<Url, Long> {
 
     @Query("SELECT u FROM Url u JOIN u.tags t WHERE u.user.id = :userId AND t.id = :tagId")
     Page<Url> findByUserIdAndTagId(@Param("userId") Long userId, @Param("tagId") Long tagId, Pageable pageable);
+
+    long countByUserId(Long userId);
+
+    @Query("SELECT COALESCE(SUM(u.clickCount), 0) FROM Url u WHERE u.user.id = :userId")
+    long sumClickCountByUserId(@Param("userId") Long userId);
 }

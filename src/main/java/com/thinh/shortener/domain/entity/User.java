@@ -49,4 +49,10 @@ public class User {
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     private List<Url> urls;
+
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private UserProfile profile;
+
 }

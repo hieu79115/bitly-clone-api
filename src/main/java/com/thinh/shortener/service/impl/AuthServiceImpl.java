@@ -5,6 +5,7 @@ import com.thinh.shortener.domain.dto.request.RegisterRequestDto;
 import com.thinh.shortener.domain.dto.response.AuthResponseDto;
 import com.thinh.shortener.domain.entity.Role;
 import com.thinh.shortener.domain.entity.User;
+import com.thinh.shortener.domain.entity.UserProfile;
 import com.thinh.shortener.exception.EmailAlreadyExistsException;
 import com.thinh.shortener.repository.UserRepository;
 import com.thinh.shortener.security.jwt.JwtTokenProvider;
@@ -37,6 +38,11 @@ public class AuthServiceImpl implements AuthService {
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(Role.ROLE_USER)
                 .build();
+
+        UserProfile profile = UserProfile.builder()
+                .user(user)
+                .build();
+        user.setProfile(profile);
 
         userRepository.save(user);
     }
