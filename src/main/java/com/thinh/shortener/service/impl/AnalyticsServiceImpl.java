@@ -44,6 +44,9 @@ public class AnalyticsServiceImpl implements AnalyticsService {
                 .build();
 
         clickAnalyticsRepository.save(analytics);
+
+        url.setClickCount(url.getClickCount() + 1);
+        urlRepository.save(url);
     }
 
     @Override

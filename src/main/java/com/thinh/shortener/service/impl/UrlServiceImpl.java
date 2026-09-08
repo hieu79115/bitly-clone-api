@@ -15,6 +15,10 @@ import com.thinh.shortener.repository.UrlRepository;
 import com.thinh.shortener.repository.UserRepository;
 import com.thinh.shortener.service.UrlService;
 import com.thinh.shortener.util.Base62Encoder;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
@@ -39,6 +43,7 @@ public class UrlServiceImpl implements UrlService {
     private final Base62Encoder base62Encoder;
     private final UrlMapper urlMapper;
     private final TagRepository tagRepository;
+    private final CacheManager cacheManager;
 
     // Get the domain from the configuration file; defaults to localhost:8080/
     @Value("${app.domain:http://localhost:8080/}")
@@ -76,11 +81,6 @@ public class UrlServiceImpl implements UrlService {
         }
 
         // CASE 2: Auto-generated using the Base62 algorithm
-        /*
-         * Since the short_code column in the database enforces a NOT NULL constraint,
-         * we must temporarily store a dummy string.
-         * Only after the database assigns an ID do we convert that ID to Base62 and perform an update.
-         */
         Url url = Url.builder()
                 .originalUrl(request.getOriginalUrl())
                 .shortCode("tmp_" + UUID.randomUUID().toString().substring(0, 8))
@@ -88,30 +88,26 @@ public class UrlServiceImpl implements UrlService {
                 .user(user)
                 .tags(tags)
                 .build();
-        url = urlRepository.save(url); // 1st attempt: Save to get the ID
+        url = urlRepository.save(url);
 
-        // Get the ID and encode it using Base62
         shortCode = base62Encoder.encode(url.getId());
 
         url.setShortCode(shortCode);
-        urlRepository.save(url); // 2nd attempt: Update the standard code in the database
+        urlRepository.save(url);
 
         return urlMapper.toDto(url, domain);
     }
 
     @Override
-    @Transactional
+    @Transactional(readOnly = true)
+    @Cacheable(value = "urls", key = "#shortCode")
     public String getOriginalUrl(String shortCode) {
         Url url = urlRepository.findByShortCode(shortCode)
                 .orElseThrow(() -> new ResourceNotFoundException("URL not found or has been deleted"));
 
-
         if (url.getExpiresAt() != null && LocalDateTime.now().isAfter(url.getExpiresAt())) {
             throw new UrlExpiredException("This link has expired!");
         }
-
-        url.setClickCount(url.getClickCount() + 1);
-        urlRepository.save(url);
 
         return url.getOriginalUrl();
     }
@@ -134,6 +130,7 @@ public class UrlServiceImpl implements UrlService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "urls", key = "#result.shortCode")
     public UrlResponseDto updateUrl(Long id, UpdateUrlRequestDto request, String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -167,5 +164,10 @@ public class UrlServiceImpl implements UrlService {
                 .orElseThrow(() -> new AccessDeniedException("You do not have permission to delete this URL"));
 
         urlRepository.delete(url);
+
+        Cache cache = cacheManager.getCache("urls");
+        if (cache != null) {
+            cache.evict(url.getShortCode());
+        }
     }
 }
