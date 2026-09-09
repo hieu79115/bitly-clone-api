@@ -15,12 +15,10 @@ import com.thinh.shortener.repository.UrlRepository;
 import com.thinh.shortener.repository.UserRepository;
 import com.thinh.shortener.service.UrlService;
 import com.thinh.shortener.util.Base62Encoder;
-import org.springframework.cache.Cache;
-import org.springframework.cache.CacheManager;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
+import com.thinh.shortener.util.RedisKeyConstants;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -28,11 +26,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -43,7 +43,7 @@ public class UrlServiceImpl implements UrlService {
     private final Base62Encoder base62Encoder;
     private final UrlMapper urlMapper;
     private final TagRepository tagRepository;
-    private final CacheManager cacheManager;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     // Get the domain from the configuration file; defaults to localhost:8080/
     @Value("${app.domain:http://localhost:8080/}")
@@ -100,13 +100,25 @@ public class UrlServiceImpl implements UrlService {
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = "urls", key = "#shortCode")
     public String getOriginalUrl(String shortCode) {
+        String cacheKey = RedisKeyConstants.URL_PREFIX + shortCode;
+
+        String cachedOriginalUrl = (String) redisTemplate.opsForValue().get(cacheKey);
+        if (cachedOriginalUrl != null) {
+            return cachedOriginalUrl;
+        }
+
         Url url = urlRepository.findByShortCode(shortCode)
                 .orElseThrow(() -> new ResourceNotFoundException("URL not found or has been deleted"));
 
-        if (url.getExpiresAt() != null && LocalDateTime.now().isAfter(url.getExpiresAt())) {
-            throw new UrlExpiredException("This link has expired!");
+        if (url.getExpiresAt() != null) {
+            long remainingSeconds = Duration.between(LocalDateTime.now(), url.getExpiresAt()).getSeconds();
+            if (remainingSeconds <= 0) {
+                throw new UrlExpiredException("This link has expired!");
+            }
+            redisTemplate.opsForValue().set(cacheKey, url.getOriginalUrl(), remainingSeconds, TimeUnit.SECONDS);
+        } else {
+            redisTemplate.opsForValue().set(cacheKey, url.getOriginalUrl(), 24, TimeUnit.HOURS);
         }
 
         return url.getOriginalUrl();
@@ -130,7 +142,6 @@ public class UrlServiceImpl implements UrlService {
 
     @Override
     @Transactional
-    @CacheEvict(value = "urls", key = "#result.shortCode")
     public UrlResponseDto updateUrl(Long id, UpdateUrlRequestDto request, String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -151,6 +162,9 @@ public class UrlServiceImpl implements UrlService {
         }
 
         url = urlRepository.save(url);
+
+        redisTemplate.delete(RedisKeyConstants.URL_PREFIX + url.getShortCode());
+
         return urlMapper.toDto(url, domain);
     }
 
@@ -165,9 +179,6 @@ public class UrlServiceImpl implements UrlService {
 
         urlRepository.delete(url);
 
-        Cache cache = cacheManager.getCache("urls");
-        if (cache != null) {
-            cache.evict(url.getShortCode());
-        }
+        redisTemplate.delete(RedisKeyConstants.URL_PREFIX + url.getShortCode());
     }
 }

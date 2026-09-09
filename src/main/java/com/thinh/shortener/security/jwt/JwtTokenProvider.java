@@ -25,6 +25,13 @@ public class JwtTokenProvider {
     @Value("${app.jwt.expiration}")
     private long jwtExpirationInMs;
 
+    @Value("${app.jwt.refresh-expiration:604800000}")
+    private long refreshExpirationInMs;
+
+    public static final String TOKEN_TYPE_CLAIM = "token_type";
+    public static final String ACCESS_TOKEN_TYPE = "ACCESS";
+    public static final String REFRESH_TOKEN_TYPE = "REFRESH";
+
     private SecretKey getSigningKey() {
         byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
         return Keys.hmacShaKeyFor(keyBytes);
@@ -37,7 +44,8 @@ public class JwtTokenProvider {
         Date expiryDate = new Date(now.getTime() + jwtExpirationInMs);
 
         return Jwts.builder()
-                .subject(userPrincipal.getEmail()) // Save email to token
+                .subject(userPrincipal.getEmail())
+                .claim(TOKEN_TYPE_CLAIM, ACCESS_TOKEN_TYPE)// Save email to token
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(getSigningKey()) // Sign using a security algorithm
@@ -69,4 +77,40 @@ public class JwtTokenProvider {
         return false;
     }
 
+    public String generateRefreshToken(String email) {
+        Date now = new Date();
+        Date expiryDate = new Date(now.getTime() + refreshExpirationInMs);
+
+        return Jwts.builder()
+                .subject(email)
+                .claim(TOKEN_TYPE_CLAIM, REFRESH_TOKEN_TYPE)
+                .issuedAt(now)
+                .expiration(expiryDate)
+                .signWith(getSigningKey())
+                .compact();
+    }
+
+    public long getRemainingExpirationInMs(String token) {
+        try {
+            Date expiration = Jwts.parser()
+                    .verifyWith(getSigningKey())
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload()
+                    .getExpiration();
+            long diff = expiration.getTime() - System.currentTimeMillis();
+            return Math.max(diff, 0);
+        } catch (Exception ex) {
+            return 0;
+        }
+    }
+
+    public String getTokenType(String token) {
+        return Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .get(TOKEN_TYPE_CLAIM, String.class);
+    }
 }
