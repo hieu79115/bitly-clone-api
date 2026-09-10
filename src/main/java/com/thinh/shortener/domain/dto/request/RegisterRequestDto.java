@@ -3,9 +3,11 @@ package com.thinh.shortener.domain.dto.request;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import lombok.Builder;
 import lombok.Data;
 
 @Data
+@Builder
 public class RegisterRequestDto {
     @NotBlank(message = "Email must not be left blank.")
     @Email(message = "Invalid email format.")

@@ -2,9 +2,11 @@ package com.thinh.shortener.domain.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import lombok.Builder;
 import lombok.Data;
 
 @Data
+@Builder
 public class ChangePasswordRequestDto {
 
     @NotBlank(message = "Current password must not be blank")

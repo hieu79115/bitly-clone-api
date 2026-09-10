@@ -1,9 +1,11 @@
 package com.thinh.shortener.domain.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
+import lombok.Builder;
 import lombok.Data;
 
 @Data
+@Builder
 public class LoginRequestDto {
     @NotBlank(message = "Email must not be left blank.")
     private String email;

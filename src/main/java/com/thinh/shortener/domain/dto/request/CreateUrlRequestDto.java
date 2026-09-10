@@ -3,6 +3,7 @@ package com.thinh.shortener.domain.dto.request;
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import lombok.Builder;
 import lombok.Data;
 import org.hibernate.validator.constraints.URL;
 
@@ -10,6 +11,7 @@ import java.time.LocalDateTime;
 import java.util.Set;
 
 @Data
+@Builder
 public class CreateUrlRequestDto {
     @NotBlank(message = "The original URL cannot be left blank.")
     @URL(message = "Invalid URL format")

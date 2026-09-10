@@ -2,10 +2,12 @@ package com.thinh.shortener.domain.dto.request;
 
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import lombok.Builder;
 import lombok.Data;
 import org.hibernate.validator.constraints.URL;
 
 @Data
+@Builder
 public class UpdateProfileRequestDto {
 
     @Size(max = 100, message = "Full name must not exceed 100 characters")
