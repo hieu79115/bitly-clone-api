@@ -16,6 +16,7 @@ import com.thinh.shortener.repository.UserRepository;
 import com.thinh.shortener.service.UrlService;
 import com.thinh.shortener.util.Base62Encoder;
 import com.thinh.shortener.util.RedisKeyConstants;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -34,6 +35,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UrlServiceImpl implements UrlService {
@@ -65,6 +67,7 @@ public class UrlServiceImpl implements UrlService {
         // CASE 1: User assigns a custom name (customAlias)
         if (StringUtils.hasText(shortCode)) {
             if (urlRepository.findByShortCode(shortCode).isPresent()) {
+                log.warn("Failed to create short URL: Alias '{}' already in use", shortCode);
                 throw new AliasAlreadyExistsException("This alias is already in use!");
             }
 
@@ -77,6 +80,7 @@ public class UrlServiceImpl implements UrlService {
                     .build();
 
             url = urlRepository.save(url);
+            log.info("Created short URL with custom alias: shortCode={}, user={}", shortCode, email);
             return urlMapper.toDto(url, domain);
         }
 
@@ -95,6 +99,8 @@ public class UrlServiceImpl implements UrlService {
         url.setShortCode(shortCode);
         urlRepository.save(url);
 
+        log.info("Created short URL with Base62 auto-gen: shortCode={}, user={}", shortCode, email);
+
         return urlMapper.toDto(url, domain);
     }
 
@@ -105,15 +111,18 @@ public class UrlServiceImpl implements UrlService {
 
         String cachedOriginalUrl = (String) redisTemplate.opsForValue().get(cacheKey);
         if (cachedOriginalUrl != null) {
+            log.debug("Cache hit in Redis for shortCode: {}", shortCode);
             return cachedOriginalUrl;
         }
 
+        log.debug("Cache miss for shortCode: {}, querying database", shortCode);
         Url url = urlRepository.findByShortCode(shortCode)
                 .orElseThrow(() -> new ResourceNotFoundException("URL not found or has been deleted"));
 
         if (url.getExpiresAt() != null) {
             long remainingSeconds = Duration.between(LocalDateTime.now(), url.getExpiresAt()).getSeconds();
             if (remainingSeconds <= 0) {
+                log.warn("Attempted to access expired link: shortCode={}", shortCode);
                 throw new UrlExpiredException("This link has expired!");
             }
             redisTemplate.opsForValue().set(cacheKey, url.getOriginalUrl(), remainingSeconds, TimeUnit.SECONDS);
@@ -137,6 +146,7 @@ public class UrlServiceImpl implements UrlService {
             urlPage = urlRepository.findByUserId(user.getId(), pageable);
         }
 
+        log.debug("Fetched {} URLs on page {} for user: {}, tagId: {}", urlPage.getNumberOfElements(), pageable.getPageNumber(), email, tagId);
         return urlPage.map(url -> urlMapper.toDto(url, domain));
     }
 
@@ -164,6 +174,7 @@ public class UrlServiceImpl implements UrlService {
         url = urlRepository.save(url);
 
         redisTemplate.delete(RedisKeyConstants.URL_PREFIX + url.getShortCode());
+        log.info("Updated URL and evicted Redis cache: id={}, shortCode={}", id, url.getShortCode());
 
         return urlMapper.toDto(url, domain);
     }
@@ -180,5 +191,6 @@ public class UrlServiceImpl implements UrlService {
         urlRepository.delete(url);
 
         redisTemplate.delete(RedisKeyConstants.URL_PREFIX + url.getShortCode());
+        log.info("Deleted URL and evicted Redis cache: id={}, shortCode={}", id, url.getShortCode());
     }
 }

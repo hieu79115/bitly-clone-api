@@ -13,10 +13,12 @@ import com.thinh.shortener.repository.UserProfileRepository;
 import com.thinh.shortener.repository.UserRepository;
 import com.thinh.shortener.service.ProfileService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProfileServiceImpl implements ProfileService {
@@ -40,6 +42,7 @@ public class ProfileServiceImpl implements ProfileService {
         response.setTotalUrls(urlRepository.countByUserId(user.getId()));
         response.setTotalClicks(urlRepository.sumClickCountByUserId(user.getId()));
 
+        log.debug("Retrieved profile for user: {}", email);
         return response;
     }
 
@@ -59,6 +62,7 @@ public class ProfileServiceImpl implements ProfileService {
         profile.setCompany(request.getCompany());
 
         profile = userProfileRepository.save(profile);
+        log.info("User profile updated successfully: email={}", email);
 
         UserProfileResponseDto response = userProfileMapper.toDto(profile);
         response.setTotalUrls(urlRepository.countByUserId(user.getId()));
@@ -74,18 +78,22 @@ public class ProfileServiceImpl implements ProfileService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+            log.warn("Password change rejected: Incorrect current password for user: {}", email);
             throw new InvalidPasswordException("Current password is not correct!");
         }
 
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
+            log.warn("Password change rejected: Confirmation password mismatch for user: {}", email);
             throw new InvalidPasswordException("New password and confirmation password do not match!");
         }
 
         if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+            log.warn("Password change rejected: New password cannot be same as old password for user: {}", email);
             throw new InvalidPasswordException("New password cannot be the same as current password!");
         }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
+        log.info("Password changed successfully for user: {}", email);
     }
 }

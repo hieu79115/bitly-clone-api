@@ -11,11 +11,13 @@ import com.thinh.shortener.repository.UserRepository;
 import com.thinh.shortener.service.AnalyticsService;
 import com.thinh.shortener.util.UserAgentParser;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AnalyticsServiceImpl implements AnalyticsService {
@@ -31,6 +33,7 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 
         Url url = urlRepository.findByShortCode(shortCode).orElse(null);
         if (url == null) {
+            log.warn("Skipping click recording: Short code '{}' not found", shortCode);
             return;
         }
 
@@ -47,6 +50,9 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 
         url.setClickCount(url.getClickCount() + 1);
         urlRepository.save(url);
+
+        log.debug("Recorded click event for shortCode={}, browser={}, os={}, device={}", 
+                shortCode, analytics.getBrowser(), analytics.getOperatingSystem(), analytics.getDeviceType());
     }
 
     @Override
@@ -60,10 +66,11 @@ public class AnalyticsServiceImpl implements AnalyticsService {
                 .orElseThrow(() -> new ResourceNotFoundException(("Url not found")));
 
         if (!url.getUser().getId().equals(user.getId())) {
+            log.warn("Access denied: User '{}' tried to view analytics for shortCode '{}' belonging to another user", email, shortCode);
             throw new AccessDeniedException("You do not have permission to view analytics for this URL");
         }
 
-        return AnalyticsSummaryResponseDto.builder()
+        AnalyticsSummaryResponseDto summary = AnalyticsSummaryResponseDto.builder()
                 .shortCode(url.getShortCode())
                 .originalUrl(url.getOriginalUrl())
                 .totalClicks(clickAnalyticsRepository.countByUrlId(url.getId()))
@@ -71,5 +78,8 @@ public class AnalyticsServiceImpl implements AnalyticsService {
                 .clicksByOs(clickAnalyticsRepository.countClicksByOs(url.getId()))
                 .clicksByDevice(clickAnalyticsRepository.countClicksByDevice(url.getId()))
                 .build();
+
+        log.info("Retrieved analytics summary for shortCode={}, user={}", shortCode, email);
+        return summary;
     }
 }

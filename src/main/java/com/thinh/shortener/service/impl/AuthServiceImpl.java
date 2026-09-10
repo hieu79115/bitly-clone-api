@@ -25,8 +25,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import com.thinh.shortener.util.RedisKeyConstants;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.concurrent.TimeUnit;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
@@ -41,6 +44,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public void register(RegisterRequestDto request) {
         if (userRepository.existsByEmail(request.getEmail())) {
+            log.warn("Registration failed: Email already exists - {}", request.getEmail());
             throw new EmailAlreadyExistsException("Email has already been registered!");
         }
 
@@ -56,6 +60,7 @@ public class AuthServiceImpl implements AuthService {
         user.setProfile(profile);
 
         userRepository.save(user);
+        log.info("New user registered successfully: email={}", request.getEmail());
     }
 
     @Override
@@ -79,6 +84,8 @@ public class AuthServiceImpl implements AuthService {
                 TimeUnit.DAYS
         );
 
+        log.info("User authenticated successfully: email={}", request.getEmail());
+
         return AuthResponseDto.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
@@ -91,11 +98,13 @@ public class AuthServiceImpl implements AuthService {
         String refreshToken = request.getRefreshToken();
 
         if (!tokenProvider.validateToken(refreshToken)) {
+            log.warn("Token refresh rejected: Invalid or expired refresh token");
             throw new BadCredentialsException("Invalid or expired refresh token!");
         }
 
         String tokenType = tokenProvider.getTokenType(refreshToken);
         if (!JwtTokenProvider.REFRESH_TOKEN_TYPE.equals(tokenType)) {
+            log.warn("Token refresh rejected: Token type is not REFRESH");
             throw new BadCredentialsException("Token is not a valid refresh token!");
         }
 
@@ -103,6 +112,7 @@ public class AuthServiceImpl implements AuthService {
 
         String savedRefreshToken = (String) redisTemplate.opsForValue().get(RedisKeyConstants.REFRESH_TOKEN_PREFIX + email);
         if (savedRefreshToken == null || !savedRefreshToken.equals(refreshToken)) {
+            log.warn("Token refresh rejected: Refresh token mismatch or revoked for user: {}", email);
             throw new BadCredentialsException("Refresh token has been revoked or expired!");
         }
 
@@ -120,6 +130,8 @@ public class AuthServiceImpl implements AuthService {
                 7,
                 TimeUnit.DAYS
         );
+
+        log.info("Token rotated successfully for user: {}", email);
 
         return AuthResponseDto.builder()
                 .accessToken(newAccessToken)
@@ -139,6 +151,7 @@ public class AuthServiceImpl implements AuthService {
                         remainingTimeMs,
                         TimeUnit.MILLISECONDS
                 );
+                log.info("Access token blacklisted in Redis with TTL: {} ms", remainingTimeMs);
             }
 
             if (!StringUtils.hasText(email)) {
@@ -151,6 +164,7 @@ public class AuthServiceImpl implements AuthService {
 
         if (StringUtils.hasText(email)) {
             redisTemplate.delete(RedisKeyConstants.REFRESH_TOKEN_PREFIX + email);
+            log.info("User logged out and refresh token deleted: email={}", email);
         }
 
         SecurityContextHolder.clearContext();

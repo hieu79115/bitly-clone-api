@@ -12,11 +12,13 @@ import com.thinh.shortener.repository.TagRepository;
 import com.thinh.shortener.repository.UserRepository;
 import com.thinh.shortener.service.TagService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TagServiceImpl implements TagService {
@@ -32,6 +34,7 @@ public class TagServiceImpl implements TagService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (tagRepository.existsByUserIdAndName(user.getId(), request.getName())) {
+            log.warn("Failed to create tag: Tag name '{}' already exists for user={}", request.getName(), email);
             throw new TagAlreadyExistsException("Tag name '" + request.getName() + "' already exists!");
         }
 
@@ -41,6 +44,7 @@ public class TagServiceImpl implements TagService {
                 .build();
 
         tag = tagRepository.save(tag);
+        log.info("Created tag successfully: id={}, name={}, user={}", tag.getId(), tag.getName(), email);
 
         return tagMapper.toDto(tag);
     }
@@ -51,11 +55,13 @@ public class TagServiceImpl implements TagService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        return tagRepository.findByUserId(user.getId())
+        List<TagResponseDto> tags = tagRepository.findByUserId(user.getId())
                 .stream()
                 .map(tagMapper::toDto)
                 .toList();
 
+        log.debug("Fetched {} tags for user: {}", tags.size(), email);
+        return tags;
     }
 
     @Override
@@ -68,11 +74,14 @@ public class TagServiceImpl implements TagService {
                 .orElseThrow(() -> new ResourceNotFoundException("Tag not found"));
 
         if (tagRepository.existsByUserIdAndNameAndIdNot(user.getId(), request.getName(), id)) {
+            log.warn("Failed to update tag: Tag name '{}' already exists for user={}", request.getName(), email);
             throw new TagAlreadyExistsException("Tag name '" + request.getName() + "' already exists!");
         }
 
         tag.setName(request.getName());
         tag = tagRepository.save(tag);
+        log.info("Updated tag successfully: id={}, newName={}, user={}", tag.getId(), tag.getName(), email);
+
         return tagMapper.toDto(tag);
     }
 
@@ -88,5 +97,6 @@ public class TagServiceImpl implements TagService {
             url.getTags().remove(tag);
         }
         tagRepository.delete(tag);
+        log.info("Deleted tag successfully: id={}, name={}, user={}", id, tag.getName(), email);
     }
 }
