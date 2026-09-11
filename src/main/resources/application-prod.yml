@@ -1,0 +1,18 @@
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+spring:
+  data:
+    redis:
+      ssl:
+        enabled: true
+
+logging:
+  level:
+    com.thinh.shortener: INFO
+    org.springframework.web: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%X{requestId:-SYSTEM}] %-5level %logger{36} - %msg%n"
