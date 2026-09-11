@@ -36,5 +36,9 @@ out/
 .DS_Store
 Thumbs.db
 
-### Secrets (Quan trọng) ###
+### Secrets & Environment ###
+.env
+.env.local
+.env.*.local
 application-secret.yml
+!.env.example

@@ -84,7 +84,30 @@ cd bitly-clone-api
 
 ## Running the Application
 
-### Using Maven Wrapper
+### Option 1: Using Docker Compose (Recommended)
+
+1. Create your `.env` file from the template:
+   ```bash
+   cp .env.example .env
+   ```
+2. Build and start the entire stack (PostgreSQL, Redis, and Spring Boot API):
+   ```bash
+   docker compose up --build -d
+   ```
+3. Check container status:
+   ```bash
+   docker compose ps
+   ```
+4. View live application logs:
+   ```bash
+   docker compose logs -f app
+   ```
+5. Stop all services:
+   ```bash
+   docker compose down
+   ```
+
+### Option 2: Using Maven Wrapper (Local Standalone)
 
 - **Windows (PowerShell / Command Prompt)**:
   ```powershell

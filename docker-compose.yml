@@ -1,0 +1,83 @@
+services:
+  # ----------------------------------------
+  # 1. PostgreSQL Database Service
+  # ----------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: shortener-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME:-bitly_clone}
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-123456}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-bitly_clone}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - shortener-network
+
+  # ----------------------------------------
+  # 2. Redis Cache Service
+  # ----------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: shortener-redis
+    restart: always
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - shortener-network
+
+  # ----------------------------------------
+  # 3. Spring Boot API Application Service
+  # ----------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: shortener-api
+    restart: always
+    ports:
+      - "${PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy # Only start the app when Postgres is ready.
+      redis:
+        condition: service_healthy # Only start the app when Redis is ready.
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-bitly_clone}
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-123456}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PORT: ${PORT:-8080}
+      APP_DOMAIN: ${APP_DOMAIN:-http://localhost:8080/}
+      JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-3600000}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-604800000}
+    networks:
+      - shortener-network
+
+# ==========================================
+# Volumes & Networks
+# ==========================================
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  shortener-network:
+    driver: bridge
