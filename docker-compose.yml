@@ -1,3 +1,5 @@
+name: shortener
+
 services:
   # ----------------------------------------
   # 1. PostgreSQL Database Service
