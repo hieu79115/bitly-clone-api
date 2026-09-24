@@ -1,10 +1,11 @@
 package com.thinh.shortener.config;
 
-import com.thinh.shortener.security.jwt.JwtAuthenticationFilter;
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -14,17 +15,21 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.List;
+import com.thinh.shortener.security.jwt.JwtAuthenticationFilter;
+
+import lombok.RequiredArgsConstructor;
 
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Value("${app.cors.allowed-origins}")
@@ -65,15 +70,18 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable) // Disable CSRF due to token usage (stateless)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Enable CORS with configured source
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // Do not store sessions on the server
+                .exceptionHandling(ex -> ex
+                .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+                )
                 .authorizeHttpRequests(auth -> auth
-                        // Allow access to Sign-up / Log-in APIs
-                        .requestMatchers("/api/v1/auth/**").permitAll()
-                        // Allow access to the shortened link redirection API
-                        .requestMatchers("/{shortCode:[a-zA-Z0-9_-]+}").permitAll()
-                        // Allow access to Swagger UI for documentation viewing
-                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        // All remaining APIs MUST have a valid token.
-                        .anyRequest().authenticated());
+                // Allow access to Sign-up / Log-in APIs
+                .requestMatchers("/api/v1/auth/**").permitAll()
+                // Allow access to the shortened link redirection API
+                .requestMatchers("/{shortCode:[a-zA-Z0-9_-]+}").permitAll()
+                // Allow access to Swagger UI for documentation viewing
+                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                // All remaining APIs MUST have a valid token.
+                .anyRequest().authenticated());
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

@@ -32,9 +32,13 @@ public class GlobalExceptionHandler {
             );
         });
 
+        String message = validationErrors.isEmpty()
+                ? "Validation Failed"
+                : String.join("; ", validationErrors.values());
+
         ErrorResponse errorResponse = new ErrorResponse(
                 HttpStatus.BAD_REQUEST.value(),
-                "Validation Failed",
+                message,
                 LocalDateTime.now(),
                 validationErrors
         );
