@@ -88,6 +88,15 @@ public class UrlController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/api/v1/urls/{id}")
+    public ResponseEntity<UrlResponseDto> getUrlById(
+            @PathVariable Long id,
+            Principal principal
+    ) {
+        UrlResponseDto response = urlService.getUrlById(id, principal.getName());
+        return ResponseEntity.ok(response);
+    }
+
     @PutMapping("/api/v1/urls/{id}")
     public ResponseEntity<UrlResponseDto> updateUrl(
             @PathVariable Long id,

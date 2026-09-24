@@ -72,6 +72,7 @@ public class UrlServiceImpl implements UrlService {
             }
 
             Url url = Url.builder()
+                    .title(StringUtils.hasText(request.getTitle()) ? request.getTitle().trim() : null)
                     .originalUrl(request.getOriginalUrl())
                     .shortCode(shortCode)
                     .expiresAt(request.getExpiresAt())
@@ -86,6 +87,7 @@ public class UrlServiceImpl implements UrlService {
 
         // CASE 2: Auto-generated using the Base62 algorithm
         Url url = Url.builder()
+                .title(StringUtils.hasText(request.getTitle()) ? request.getTitle().trim() : null)
                 .originalUrl(request.getOriginalUrl())
                 .shortCode("tmp_" + UUID.randomUUID().toString().substring(0, 8))
                 .expiresAt(request.getExpiresAt())
@@ -151,6 +153,19 @@ public class UrlServiceImpl implements UrlService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public UrlResponseDto getUrlById(Long id, String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        Url url = urlRepository.findByIdAndUserId(id, user.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("URL not found or you do not have permission to view it"));
+
+        log.debug("Fetched URL details: id={}, shortCode={}, user={}", id, url.getShortCode(), email);
+        return urlMapper.toDto(url, domain);
+    }
+
+    @Override
     @Transactional
     public UrlResponseDto updateUrl(Long id, UpdateUrlRequestDto request, String email) {
         User user = userRepository.findByEmail(email)
@@ -159,7 +174,13 @@ public class UrlServiceImpl implements UrlService {
         Url url = urlRepository.findByIdAndUserId(id, user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("URL not found or you do not have permission to update it"));
 
-        if (request.getExpiresAt() != null) {
+        if (request.getTitle() != null) {
+            url.setTitle(StringUtils.hasText(request.getTitle()) ? request.getTitle().trim() : null);
+        }
+
+        if (Boolean.TRUE.equals(request.getClearExpiration())) {
+            url.setExpiresAt(null);
+        } else if (request.getExpiresAt() != null) {
             url.setExpiresAt(request.getExpiresAt());
         }
 
