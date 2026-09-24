@@ -15,6 +15,8 @@ public interface UrlService {
 
     Page<UrlResponseDto> getUserUrls(String email, Long tagId, Pageable pageable);
 
+    UrlResponseDto getUrlById(Long id, String email);
+
     UrlResponseDto updateUrl(Long id, UpdateUrlRequestDto request, String email);
 
     void deleteUrl(Long id, String email);

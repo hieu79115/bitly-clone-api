@@ -14,6 +14,7 @@ import java.util.Set;
 @AllArgsConstructor
 public class UrlResponseDto {
     private Long id;
+    private String title;
     private String originalUrl;
     private String shortUrl; // This will be in the format dpmain/{shortCode}
     private String shortCode;
