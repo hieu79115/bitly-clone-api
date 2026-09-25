@@ -13,7 +13,7 @@ public interface UrlService {
 
     String getOriginalUrl(String shortCode);
 
-    Page<UrlResponseDto> getUserUrls(String email, Long tagId, Pageable pageable);
+    Page<UrlResponseDto> getUserUrls(String email, Long tagId, String search, String status, Pageable pageable);
 
     UrlResponseDto getUrlById(Long id, String email);
 
