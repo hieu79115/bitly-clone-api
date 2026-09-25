@@ -81,10 +81,12 @@ public class UrlController {
     @GetMapping("/api/v1/urls")
     public ResponseEntity<Page<UrlResponseDto>> getUserUrls(
             @RequestParam(required = false) Long tagId,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status,
             @ParameterObject @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
             Principal principal
     ) {
-        Page<UrlResponseDto> response = urlService.getUserUrls(principal.getName(), tagId, pageable);
+        Page<UrlResponseDto> response = urlService.getUserUrls(principal.getName(), tagId, search, status, pageable);
         return ResponseEntity.ok(response);
     }
 

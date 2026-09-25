@@ -22,6 +22,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.jpa.domain.Specification;
+import com.thinh.shortener.repository.specification.UrlSpecification;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -137,18 +139,15 @@ public class UrlServiceImpl implements UrlService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<UrlResponseDto> getUserUrls(String email, Long tagId, Pageable pageable) {
+    public Page<UrlResponseDto> getUserUrls(String email, Long tagId, String search, String status, Pageable pageable) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        Page<Url> urlPage;
-        if (tagId != null) {
-            urlPage = urlRepository.findByUserIdAndTagId(user.getId(), tagId, pageable);
-        } else {
-            urlPage = urlRepository.findByUserId(user.getId(), pageable);
-        }
+        Specification<Url> spec = UrlSpecification.filterUrls(user.getId(), tagId, search, status);
+        Page<Url> urlPage = urlRepository.findAll(spec, pageable);
 
-        log.debug("Fetched {} URLs on page {} for user: {}, tagId: {}", urlPage.getNumberOfElements(), pageable.getPageNumber(), email, tagId);
+        log.debug("Fetched {} URLs on page {} for user: {}, tagId: {}, search: {}, status: {}",
+                urlPage.getNumberOfElements(), pageable.getPageNumber(), email, tagId, search, status);
         return urlPage.map(url -> urlMapper.toDto(url, domain));
     }
 
