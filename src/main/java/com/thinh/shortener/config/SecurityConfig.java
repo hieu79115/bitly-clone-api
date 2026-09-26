@@ -22,6 +22,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import com.thinh.shortener.security.jwt.JwtAuthenticationFilter;
+import com.thinh.shortener.security.ratelimit.RateLimitingFilter;
 
 import lombok.RequiredArgsConstructor;
 
@@ -31,6 +32,7 @@ import lombok.RequiredArgsConstructor;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final RateLimitingFilter rateLimitingFilter;
 
     @Value("${app.cors.allowed-origins}")
     private List<String> allowedOrigins;
@@ -83,6 +85,7 @@ public class SecurityConfig {
                 // All remaining APIs MUST have a valid token.
                 .anyRequest().authenticated());
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterAfter(rateLimitingFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }
