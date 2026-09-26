@@ -50,6 +50,20 @@ app:
     expiration: ${JWT_EXPIRATION:3600000}
     # 7 days = 604800000 ms (Refresh Token)
     refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    auth:
+      capacity: ${RATE_LIMIT_AUTH_CAPACITY:10}
+      duration-seconds: ${RATE_LIMIT_AUTH_DURATION:60}
+    redirect:
+      capacity: ${RATE_LIMIT_REDIRECT_CAPACITY:100}
+      duration-seconds: ${RATE_LIMIT_REDIRECT_DURATION:60}
+    create-url:
+      capacity: ${RATE_LIMIT_CREATE_URL_CAPACITY:20}
+      duration-seconds: ${RATE_LIMIT_CREATE_URL_DURATION:60}
+    general:
+      capacity: ${RATE_LIMIT_GENERAL_CAPACITY:120}
+      duration-seconds: ${RATE_LIMIT_GENERAL_DURATION:60}
 
 springdoc:
   swagger-ui:
