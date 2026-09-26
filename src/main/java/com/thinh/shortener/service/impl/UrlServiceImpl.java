@@ -22,6 +22,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.jpa.domain.Specification;
+import com.thinh.shortener.repository.specification.UrlSpecification;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -72,6 +74,7 @@ public class UrlServiceImpl implements UrlService {
             }
 
             Url url = Url.builder()
+                    .title(StringUtils.hasText(request.getTitle()) ? request.getTitle().trim() : null)
                     .originalUrl(request.getOriginalUrl())
                     .shortCode(shortCode)
                     .expiresAt(request.getExpiresAt())
@@ -86,6 +89,7 @@ public class UrlServiceImpl implements UrlService {
 
         // CASE 2: Auto-generated using the Base62 algorithm
         Url url = Url.builder()
+                .title(StringUtils.hasText(request.getTitle()) ? request.getTitle().trim() : null)
                 .originalUrl(request.getOriginalUrl())
                 .shortCode("tmp_" + UUID.randomUUID().toString().substring(0, 8))
                 .expiresAt(request.getExpiresAt())
@@ -135,19 +139,29 @@ public class UrlServiceImpl implements UrlService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<UrlResponseDto> getUserUrls(String email, Long tagId, Pageable pageable) {
+    public Page<UrlResponseDto> getUserUrls(String email, Long tagId, String search, String status, Pageable pageable) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        Page<Url> urlPage;
-        if (tagId != null) {
-            urlPage = urlRepository.findByUserIdAndTagId(user.getId(), tagId, pageable);
-        } else {
-            urlPage = urlRepository.findByUserId(user.getId(), pageable);
-        }
+        Specification<Url> spec = UrlSpecification.filterUrls(user.getId(), tagId, search, status);
+        Page<Url> urlPage = urlRepository.findAll(spec, pageable);
 
-        log.debug("Fetched {} URLs on page {} for user: {}, tagId: {}", urlPage.getNumberOfElements(), pageable.getPageNumber(), email, tagId);
+        log.debug("Fetched {} URLs on page {} for user: {}, tagId: {}, search: {}, status: {}",
+                urlPage.getNumberOfElements(), pageable.getPageNumber(), email, tagId, search, status);
         return urlPage.map(url -> urlMapper.toDto(url, domain));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UrlResponseDto getUrlById(Long id, String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        Url url = urlRepository.findByIdAndUserId(id, user.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("URL not found or you do not have permission to view it"));
+
+        log.debug("Fetched URL details: id={}, shortCode={}, user={}", id, url.getShortCode(), email);
+        return urlMapper.toDto(url, domain);
     }
 
     @Override
@@ -159,7 +173,13 @@ public class UrlServiceImpl implements UrlService {
         Url url = urlRepository.findByIdAndUserId(id, user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("URL not found or you do not have permission to update it"));
 
-        if (request.getExpiresAt() != null) {
+        if (request.getTitle() != null) {
+            url.setTitle(StringUtils.hasText(request.getTitle()) ? request.getTitle().trim() : null);
+        }
+
+        if (Boolean.TRUE.equals(request.getClearExpiration())) {
+            url.setExpiresAt(null);
+        } else if (request.getExpiresAt() != null) {
             url.setExpiresAt(request.getExpiresAt());
         }
 

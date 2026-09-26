@@ -22,6 +22,11 @@ import java.net.URI;
 import java.security.Principal;
 import java.util.List;
 
+import com.thinh.shortener.exception.ResourceNotFoundException;
+import com.thinh.shortener.exception.UrlExpiredException;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.util.StringUtils;
+
 @RestController
 @RequiredArgsConstructor
 public class UrlController {
@@ -29,6 +34,9 @@ public class UrlController {
     private final UrlService urlService;
     private final AnalyticsService analyticsService;
     private final IpAddressUtil ipAddressUtil;
+
+    @Value("${app.frontend-url:http://localhost:5173}")
+    private String frontendUrl;
 
     @PostMapping("/api/v1/urls")
     public ResponseEntity<UrlResponseDto> createUrl(@Valid @RequestBody CreateUrlRequestDto request, Principal principal) {
@@ -40,27 +48,54 @@ public class UrlController {
 
     @GetMapping("/{shortCode}")
     public ResponseEntity<Void> redirectToOriginalUrl(@PathVariable String shortCode, HttpServletRequest request) {
-        String originalUrl = urlService.getOriginalUrl(shortCode);
+        try {
+            String originalUrl = urlService.getOriginalUrl(shortCode);
 
-        String ipAddress = ipAddressUtil.getClientIp(request);
-        String userAgent = request.getHeader("User-Agent");
-        String referer = request.getHeader("Referer");
+            String ipAddress = ipAddressUtil.getClientIp(request);
+            String userAgent = request.getHeader("User-Agent");
+            String referer = request.getHeader("Referer");
 
-        analyticsService.recordClick(shortCode, ipAddress, userAgent, referer);
+            analyticsService.recordClick(shortCode, ipAddress, userAgent, referer);
 
-        // Return HTTP Status 302 (FOUND) to instruct the browser to automatically redirect to the original page.
-        return ResponseEntity.status(HttpStatus.FOUND)
-                .location(URI.create(originalUrl))
-                .build();
+            // Return HTTP Status 302 (FOUND) to instruct the browser to automatically redirect to the original page.
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .location(URI.create(originalUrl))
+                    .build();
+        } catch (UrlExpiredException ex) {
+            String redirectUrl = StringUtils.hasText(frontendUrl)
+                    ? frontendUrl + "/link-expired?code=" + shortCode
+                    : "/link-expired";
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .location(URI.create(redirectUrl))
+                    .build();
+        } catch (ResourceNotFoundException ex) {
+            String redirectUrl = StringUtils.hasText(frontendUrl)
+                    ? frontendUrl + "/404"
+                    : "/404";
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .location(URI.create(redirectUrl))
+                    .build();
+        }
     }
 
     @GetMapping("/api/v1/urls")
     public ResponseEntity<Page<UrlResponseDto>> getUserUrls(
             @RequestParam(required = false) Long tagId,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status,
             @ParameterObject @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
             Principal principal
     ) {
-        Page<UrlResponseDto> response = urlService.getUserUrls(principal.getName(), tagId, pageable);
+        Page<UrlResponseDto> response = urlService.getUserUrls(principal.getName(), tagId, search, status, pageable);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/api/v1/urls/{id}")
+    public ResponseEntity<UrlResponseDto> getUrlById(
+            @PathVariable Long id,
+            Principal principal
+    ) {
+        UrlResponseDto response = urlService.getUrlById(id, principal.getName());
         return ResponseEntity.ok(response);
     }
 

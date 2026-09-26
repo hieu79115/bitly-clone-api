@@ -5,21 +5,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
-import java.util.Set;
-
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class UrlResponseDto {
+public class TopUrlResponseDto {
     private Long id;
     private String title;
-    private String originalUrl;
-    private String shortUrl; // This will be in the format dpmain/{shortCode}
     private String shortCode;
+    private String shortUrl;
+    private String originalUrl;
     private Integer clickCount;
-    private LocalDateTime expiresAt;
-    private LocalDateTime createdAt;
-    private Set<TagResponseDto> tags;
 }
