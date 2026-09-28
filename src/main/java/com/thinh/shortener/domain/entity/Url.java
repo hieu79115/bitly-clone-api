@@ -18,7 +18,7 @@ import java.util.Set;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@SQLDelete(sql = "UPDATE urls SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
+@SQLDelete(sql = "UPDATE urls SET deleted_at = CURRENT_TIMESTAMP, short_code = CONCAT(short_code, '_del_', id) WHERE id = ?")
 @SQLRestriction("deleted_at IS NULL")
 public class Url {
 
@@ -32,7 +32,7 @@ public class Url {
     @Column(name = "original_url", nullable = false, columnDefinition = "TEXT")
     private String originalUrl;
 
-    @Column(name = "short_code", nullable = false, unique = true, length = 20)
+    @Column(name = "short_code", nullable = false, unique = true, length = 100)
     private String shortCode;
 
     @Column(name = "click_count", nullable = false)

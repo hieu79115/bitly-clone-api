@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-//@Disabled("Integration test requiring live database connection")
+@Disabled("Integration test requiring live database connection")
 class ShortenerApplicationTests {
 
 	@Test
