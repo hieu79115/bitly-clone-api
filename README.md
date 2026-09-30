@@ -1,48 +1,62 @@
 # Bitly Clone API
 
-A high-performance URL shortening and click analytics RESTful service built with Spring Boot, PostgreSQL, and Redis.
+A high-performance, production-ready URL shortener and click analytics RESTful service built with Spring Boot, PostgreSQL, and Redis.
 
 ---
 
 ## Tech Stack
 
 ![Java](https://img.shields.io/badge/Java_21-ED8B00?style=flat-square&logo=openjdk&logoColor=white)
-![Spring Boot](https://img.shields.io/badge/Spring_Boot_4.1.1-6DB33F?style=flat-square&logo=springboot&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot_3.x-6DB33F?style=flat-square&logo=springboot&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white)
 ![Spring Security](https://img.shields.io/badge/Spring_Security-6DB33F?style=flat-square&logo=springsecurity&logoColor=white)
 ![JWT](https://img.shields.io/badge/JWT-000000?style=flat-square&logo=jsonwebtokens&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker_Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![Swagger](https://img.shields.io/badge/Swagger_UI-85EA2D?style=flat-square&logo=swagger&logoColor=black)
 ![JUnit 5](https://img.shields.io/badge/JUnit_5-25A162?style=flat-square&logo=junit5&logoColor=white)
 
 ---
 
-## Project Structure 
+## Key Features
+
+- **High-Throughput URL Shortening**: Generates unique short codes using Base62 encoding with custom alias support and conflict detection.
+- **Fast 302 Redirection & Caching**: Multi-tier Redis caching for ultra-low latency redirection (`GET /{shortCode}`) with automatic cache eviction on update/delete.
+- **Asynchronous Click Analytics**: Non-blocking analytics logging capturing IP, device type, browser, operating system (via `uap-java`), and referrers.
+- **Sliding-Window Rate Limiting (Redis Lua)**: Atomic, tiered rate limiting protecting authentication, link creation, and public redirection against spam and brute-force attacks.
+- **Stateless JWT Security**: Access & Refresh token rotation with Redis-backed token blacklisting on logout.
+- **Server-Side Search & Filtering**: Advanced URL querying using Spring Data JPA Specifications (filter by active/expired status, search by title/original URL/short code, and sort by date or clicks).
+- **Interactive OpenAPI / Swagger**: Complete documentation with direct authorization testing support.
+
+---
+
+## Project Structure
 
 ```text
 src/main/java/com/thinh/shortener/
-├── config/              # Redis, OpenAPI, Async & Web MVC configurations
-├── controller/          # REST API controllers & endpoint definitions
+├── config/              # Redis, OpenAPI, Security, Rate Limit & Async configurations
+├── controller/          # REST API controllers
 ├── domain/
 │   ├── dto/             # Request & Response Data Transfer Objects
-│   ├── entity/          # JPA database entities (User, Url, Tag, ClickAnalytics)
-│   └── mapper/          # MapStruct/DTO mapping components
+│   ├── entity/          # JPA database entities (User, Url, Tag, ClickAnalytics, UserProfile)
+│   └── mapper/          # MapStruct DTO mappers
 ├── exception/           # Global exception handler & custom business exceptions
-├── repository/          # Spring Data JPA repositories
-├── security/            # Spring Security configuration, JWT provider & filters
-├── service/             # Business logic interfaces & implementation classes
-└── util/                # Base62 encoder, User-Agent parser & constants
+├── repository/          # Spring Data JPA repositories & Specifications
+├── security/            # Spring Security filter chain, JWT provider, and rate limiting filters
+├── service/             # Business logic interfaces & implementations
+└── util/                # Base62 encoder, IP utility, User-Agent parser & constants
 ```
 
 ---
 
 ## Prerequisites
 
-Ensure you have the following installed and running on your system:
+Ensure you have the following installed on your system:
 
 - **JDK 21** or higher
 - **PostgreSQL 15+**
 - **Redis 7+**
+- *(Optional)* **Docker & Docker Compose**
 
 ---
 
@@ -65,20 +79,30 @@ cd bitly-clone-api
 2. Ensure your Redis server is running:
    ```bash
    redis-cli ping
-   # Should return PONG
+   # Expected response: PONG
    ```
 
-3. (Optional) Adjust environment variables or modify `src/main/resources/application.yml` if your database credentials differ from defaults:
+3. Configure environment variables or customize `src/main/resources/application.yml`:
 
 | Variable | Description | Default Value |
 | :--- | :--- | :--- |
-| `SPRING_DATASOURCE_URL` | JDBC database URL | `jdbc:postgresql://localhost:5432/bitly_clone` |
+| `PORT` | Application server port | `8080` |
+| `SPRING_DATASOURCE_URL` | JDBC database connection URL | `jdbc:postgresql://localhost:5432/bitly_clone` |
 | `DB_USERNAME` | PostgreSQL username | `postgres` |
 | `DB_PASSWORD` | PostgreSQL password | `123456` |
-| `REDIS_HOST` | Redis server host | `localhost` |
-| `REDIS_PORT` | Redis server port | `6379` |
-| `JWT_SECRET` | 256-bit Hex/Base64 secret | *(Preconfigured default secret)* |
-| `APP_DOMAIN` | Base domain for short links | `http://localhost:8080/` |
+| `REDIS_HOST` | Redis host | `localhost` |
+| `REDIS_PORT` | Redis port | `6379` |
+| `JWT_SECRET` | 256-bit secret key for signing JWTs | *(Preconfigured default secret)* |
+| `JWT_EXPIRATION` | Access token lifetime (ms) | `3600000` (1 hour) |
+| `JWT_REFRESH_EXPIRATION` | Refresh token lifetime (ms) | `604800000` (7 days) |
+| `APP_DOMAIN` | Base domain prepended to short links | `http://localhost:8080/` |
+| `FRONTEND_URL` | Frontend client URL (for redirection fallbacks) | `http://localhost:5173` |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated list of allowed CORS origins | `http://localhost:5173,http://localhost:3000,http://localhost:4173` |
+| `RATE_LIMIT_ENABLED` | Global toggle for rate limiting filter | `true` |
+| `RATE_LIMIT_AUTH_CAPACITY` | Max requests per minute for auth endpoints (`/auth/*`) | `10` |
+| `RATE_LIMIT_REDIRECT_CAPACITY` | Max requests per minute for public redirect (`/{code}`) | `100` |
+| `RATE_LIMIT_CREATE_URL_CAPACITY`| Max requests per minute for link creation (`POST /urls`) | `20` |
+| `RATE_LIMIT_GENERAL_CAPACITY` | Max requests per minute for general endpoints | `120` |
 
 ---
 
@@ -86,11 +110,11 @@ cd bitly-clone-api
 
 ### Option 1: Using Docker Compose (Recommended)
 
-1. Create your `.env` file from the template:
+1. Create your `.env` file from the example:
    ```bash
    cp .env.example .env
    ```
-2. Build and start the entire stack (PostgreSQL, Redis, and Spring Boot API):
+2. Build and start all services (PostgreSQL, Redis, and Spring Boot API):
    ```bash
    docker compose up --build -d
    ```
@@ -98,11 +122,11 @@ cd bitly-clone-api
    ```bash
    docker compose ps
    ```
-4. View live application logs:
+4. View live logs:
    ```bash
    docker compose logs -f app
    ```
-5. Stop all services:
+5. Stop services:
    ```bash
    docker compose down
    ```
@@ -119,13 +143,13 @@ cd bitly-clone-api
   ./mvnw spring-boot:run
   ```
 
-The application will start on port `8080` by default.
+The API will be accessible at `http://localhost:8080`.
 
 ---
 
 ## Running Automated Tests
 
-Run the complete test suite (26 unit tests):
+Run the complete test suite (33 automated unit and integration tests covering business logic, rate limiting, and security filters):
 
 - **Windows**:
   ```powershell
@@ -139,61 +163,16 @@ Run the complete test suite (26 unit tests):
 
 ---
 
-## API Documentation
+## API Documentation (Swagger / OpenAPI)
 
-Once the server is running, you can access the interactive Swagger UI at:
+All API endpoints, schemas, parameters, and authentication methods are interactively documented via SpringDoc OpenAPI.
 
-```text
-http://localhost:8080/swagger-ui/index.html
-```
+Once the application is running, navigate to:
 
-OpenAPI specification (JSON format):
+- **Interactive Swagger UI**: [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
+- **OpenAPI 3.0 Specification (JSON)**: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
 
-```text
-http://localhost:8080/v3/api-docs
-```
-
----
-
-## API Endpoints Overview
-
-### Public & Redirection
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/{shortCode}` | Redirects (HTTP 302) to the original URL and records click analytics asynchronously |
-
-### Authentication (`/api/v1/auth`)
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `POST` | `/api/v1/auth/register` | Register a new user account |
-| `POST` | `/api/v1/auth/login` | Authenticate and obtain Access + Refresh tokens |
-| `POST` | `/api/v1/auth/refresh` | Rotate and issue a new Access Token + Refresh Token |
-| `POST` | `/api/v1/auth/logout` | Invalidate tokens and blacklist the current Access Token |
-
-### URLs (`/api/v1/urls`)
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `POST` | `/api/v1/urls` | Create a shortened URL (auto Base62 or custom alias) |
-| `GET` | `/api/v1/urls` | Get paginated list of user's URLs (supports filtering by `tagId`) |
-| `PUT` | `/api/v1/urls/{id}` | Update URL expiration date and tags |
-| `DELETE` | `/api/v1/urls/{id}` | Soft delete URL and evict Redis cache |
-
-### Analytics (`/api/v1/analytics`)
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/v1/analytics/{shortCode}` | Get total clicks and breakdown by Browser, OS, and Device |
-
-### Tags (`/api/v1/tags`)
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `POST` | `/api/v1/tags` | Create a new tag |
-| `GET` | `/api/v1/tags` | Get all tags created by current user |
-| `PUT` | `/api/v1/tags/{id}` | Update tag name |
-| `DELETE` | `/api/v1/tags/{id}` | Delete a tag |
-
-### Profile (`/api/v1/profile`)
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/v1/profile` | Get current user's profile and overall statistics |
-| `PUT` | `/api/v1/profile` | Update profile information |
-| `PUT` | `/api/v1/profile/password` | Change user password |
+> **Testing authenticated endpoints in Swagger:**
+> 1. Call `POST /api/v1/auth/login` to retrieve an `accessToken`.
+> 2. Click the green **Authorize** button at the top of the Swagger page.
+> 3. Enter your token in the format: `Bearer <your-token>`.
