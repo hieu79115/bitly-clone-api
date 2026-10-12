@@ -1,0 +1,199 @@
+package com.thinh.shortener.config;
+
+import com.thinh.shortener.domain.entity.Permission;
+import com.thinh.shortener.domain.entity.Role;
+import com.thinh.shortener.domain.entity.User;
+import com.thinh.shortener.domain.entity.UserProfile;
+import com.thinh.shortener.repository.PermissionRepository;
+import com.thinh.shortener.repository.RoleRepository;
+import com.thinh.shortener.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.*;
+
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class RbacDataInitializer implements CommandLineRunner {
+
+    private final PermissionRepository permissionRepository;
+    private final RoleRepository roleRepository;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    @Override
+    @Transactional
+    public void run(String... args) {
+        log.info("Checking and initializing Dynamic RBAC permissions and roles...");
+
+        // 1. Initialize Permissions
+        Map<String, Permission> permissions = initializePermissions();
+
+        // 2. Initialize System Roles
+        Map<String, Role> roles = initializeRoles(permissions);
+
+        // 3. Initialize Root Super Admin Account
+        initializeRootSuperAdmin(roles.get("SUPER_ADMIN"));
+
+        // 4. Ensure any existing users without roles get assigned the default USER role
+        migrateExistingUsersWithoutRoles(roles.get("USER"));
+
+        log.info("Dynamic RBAC initialization completed successfully.");
+    }
+
+    private Map<String, Permission> initializePermissions() {
+        Map<String, Permission> result = new HashMap<>();
+
+        // Definition list: name, module, description
+        List<String[]> permDefs = List.of(
+                // USER Module
+                new String[]{"USER_READ", "USER", "View user accounts and profiles"},
+                new String[]{"USER_MANAGE", "USER", "Update user status, activate, or deactivate users"},
+                new String[]{"USER_DELETE", "USER", "Delete user accounts"},
+
+                // URL Module
+                new String[]{"URL_READ", "URL", "View all short links across the platform"},
+                new String[]{"URL_DISABLE", "URL", "Disable or enable links for safety/policy reasons"},
+                new String[]{"URL_DELETE", "URL", "Permanently or soft delete links"},
+
+                // ANALYTICS Module
+                new String[]{"ANALYTICS_READ", "ANALYTICS", "View system-wide analytics, traffic volume, and KPI reports"},
+
+                // RBAC Module
+                new String[]{"ROLE_READ", "RBAC", "View roles and permission matrices"},
+                new String[]{"ROLE_MANAGE", "RBAC", "Create custom roles, edit permissions, and assign roles to users"}
+        );
+
+        for (String[] def : permDefs) {
+            String name = def[0];
+            String module = def[1];
+            String desc = def[2];
+
+            Permission perm = permissionRepository.findByName(name)
+                    .orElseGet(() -> {
+                        Permission newPerm = Permission.builder()
+                                .name(name)
+                                .module(module)
+                                .description(desc)
+                                .build();
+                        return permissionRepository.save(newPerm);
+                    });
+            result.put(name, perm);
+        }
+
+        return result;
+    }
+
+    private Map<String, Role> initializeRoles(Map<String, Permission> permMap) {
+        Map<String, Role> result = new HashMap<>();
+
+        // 1. SUPER_ADMIN: has ALL permissions
+        Role superAdmin = roleRepository.findByNameWithPermissions("SUPER_ADMIN")
+                .orElseGet(() -> Role.builder()
+                        .name("SUPER_ADMIN")
+                        .description("Root System Administrator with complete control over all modules, roles, and permissions.")
+                        .isSystem(true)
+                        .permissions(new HashSet<>())
+                        .build());
+        superAdmin.setPermissions(new HashSet<>(permMap.values()));
+        superAdmin.setIsSystem(true);
+        result.put("SUPER_ADMIN", roleRepository.save(superAdmin));
+
+        // 2. ADMIN: User & URL & Analytics & Role read
+        Set<Permission> adminPerms = new HashSet<>();
+        addPermIfPresent(adminPerms, permMap, "USER_READ", "USER_MANAGE", "URL_READ", "URL_DISABLE", "URL_DELETE", "ANALYTICS_READ", "ROLE_READ");
+
+        Role admin = roleRepository.findByNameWithPermissions("ADMIN")
+                .orElseGet(() -> Role.builder()
+                        .name("ADMIN")
+                        .description("Administrator managing users, links, and system analytics.")
+                        .isSystem(true)
+                        .permissions(new HashSet<>())
+                        .build());
+        admin.setPermissions(adminPerms);
+        admin.setIsSystem(true);
+        result.put("ADMIN", roleRepository.save(admin));
+
+        // 3. MODERATOR: Trust & Safety link reviewer
+        Set<Permission> modPerms = new HashSet<>();
+        addPermIfPresent(modPerms, permMap, "URL_READ", "URL_DISABLE", "ANALYTICS_READ", "USER_READ");
+
+        Role moderator = roleRepository.findByNameWithPermissions("MODERATOR")
+                .orElseGet(() -> Role.builder()
+                        .name("MODERATOR")
+                        .description("Content & Trust Safety Moderator to inspect and disable abusive or phishing links.")
+                        .isSystem(false)
+                        .permissions(new HashSet<>())
+                        .build());
+        moderator.setPermissions(modPerms);
+        result.put("MODERATOR", roleRepository.save(moderator));
+
+        // 4. USER: regular user
+        Role userRole = roleRepository.findByNameWithPermissions("USER")
+                .orElseGet(() -> Role.builder()
+                        .name("USER")
+                        .description("Standard platform user account.")
+                        .isSystem(true)
+                        .permissions(new HashSet<>())
+                        .build());
+        result.put("USER", roleRepository.save(userRole));
+
+        return result;
+    }
+
+    private void addPermIfPresent(Set<Permission> target, Map<String, Permission> permMap, String... names) {
+        for (String name : names) {
+            Permission p = permMap.get(name);
+            if (p != null) {
+                target.add(p);
+            }
+        }
+    }
+
+    private void initializeRootSuperAdmin(Role superAdminRole) {
+        String rootEmail = "root@app.local";
+
+        Optional<User> existing = userRepository.findByEmail(rootEmail);
+        if (existing.isEmpty()) {
+            User root = User.builder()
+                    .email(rootEmail)
+                    .password(passwordEncoder.encode("AdminPassword@123"))
+                    .isActive(true)
+                    .role("ROLE_ADMIN")
+                    .roles(new HashSet<>(Collections.singletonList(superAdminRole)))
+                    .build();
+
+            UserProfile profile = UserProfile.builder()
+                    .user(root)
+                    .fullName("Root Administrator")
+                    .bio("Master System Administrator")
+                    .build();
+            root.setProfile(profile);
+
+            userRepository.save(root);
+            log.info("Default Root SuperAdmin account initialized: email={}", rootEmail);
+        } else {
+            User root = existing.get();
+            if (root.getRoles() == null || root.getRoles().isEmpty()) {
+                root.setRoles(new HashSet<>(Collections.singletonList(superAdminRole)));
+                userRepository.save(root);
+                log.info("Updated existing Root account with SUPER_ADMIN role.");
+            }
+        }
+    }
+
+    private void migrateExistingUsersWithoutRoles(Role userRole) {
+        List<User> allUsers = userRepository.findAll();
+        for (User u : allUsers) {
+            if (u.getRoles() == null || u.getRoles().isEmpty()) {
+                u.setRoles(new HashSet<>(Collections.singletonList(userRole)));
+                userRepository.save(u);
+            }
+        }
+    }
+}

@@ -8,8 +8,10 @@ import com.thinh.shortener.domain.entity.Role;
 import com.thinh.shortener.domain.entity.User;
 import com.thinh.shortener.domain.entity.UserProfile;
 import com.thinh.shortener.exception.EmailAlreadyExistsException;
+import com.thinh.shortener.repository.RoleRepository;
 import com.thinh.shortener.repository.UserRepository;
 import com.thinh.shortener.security.CustomUserDetailsService;
+import com.thinh.shortener.security.UserPrincipal;
 import com.thinh.shortener.security.jwt.JwtTokenProvider;
 import com.thinh.shortener.service.AuthService;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -27,6 +30,9 @@ import com.thinh.shortener.util.RedisKeyConstants;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -35,6 +41,7 @@ import java.util.concurrent.TimeUnit;
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
@@ -48,10 +55,18 @@ public class AuthServiceImpl implements AuthService {
             throw new EmailAlreadyExistsException("Email has already been registered!");
         }
 
+        Role userRole = roleRepository.findByName("USER").orElse(null);
+        Set<Role> roles = new HashSet<>();
+        if (userRole != null) {
+            roles.add(userRole);
+        }
+
         User user = User.builder()
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .role(Role.ROLE_USER)
+                .isActive(true)
+                .role("ROLE_USER")
+                .roles(roles)
                 .build();
 
         UserProfile profile = UserProfile.builder()
@@ -84,12 +99,21 @@ public class AuthServiceImpl implements AuthService {
                 TimeUnit.DAYS
         );
 
+        List<String> roles = java.util.Collections.emptyList();
+        List<String> permissions = java.util.Collections.emptyList();
+        if (authentication.getPrincipal() instanceof UserPrincipal userPrincipal) {
+            roles = new java.util.ArrayList<>(userPrincipal.getRoleNames());
+            permissions = new java.util.ArrayList<>(userPrincipal.getPermissionNames());
+        }
+
         log.info("User authenticated successfully: email={}", request.getEmail());
 
         return AuthResponseDto.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .email(request.getEmail())
+                .roles(roles)
+                .permissions(permissions)
                 .build();
     }
 
@@ -131,12 +155,21 @@ public class AuthServiceImpl implements AuthService {
                 TimeUnit.DAYS
         );
 
+        List<String> roles = java.util.Collections.emptyList();
+        List<String> permissions = java.util.Collections.emptyList();
+        if (userDetails instanceof UserPrincipal userPrincipal) {
+            roles = new java.util.ArrayList<>(userPrincipal.getRoleNames());
+            permissions = new java.util.ArrayList<>(userPrincipal.getPermissionNames());
+        }
+
         log.info("Token rotated successfully for user: {}", email);
 
         return AuthResponseDto.builder()
                 .accessToken(newAccessToken)
                 .refreshToken(newRefreshToken)
                 .email(email)
+                .roles(roles)
+                .permissions(permissions)
                 .build();
     }
 
@@ -151,23 +184,13 @@ public class AuthServiceImpl implements AuthService {
                         remainingTimeMs,
                         TimeUnit.MILLISECONDS
                 );
-                log.info("Access token blacklisted in Redis with TTL: {} ms", remainingTimeMs);
-            }
-
-            if (!StringUtils.hasText(email)) {
-                try {
-                    email = tokenProvider.getEmailFromJWT(accessToken);
-                } catch (Exception ignored) {
-                }
+                log.info("Access token added to Redis blacklist for user: {}", email);
             }
         }
 
         if (StringUtils.hasText(email)) {
             redisTemplate.delete(RedisKeyConstants.REFRESH_TOKEN_PREFIX + email);
-            log.info("User logged out and refresh token deleted: email={}", email);
+            log.info("Refresh token removed from Redis for user: {}", email);
         }
-
-        SecurityContextHolder.clearContext();
     }
-
 }
