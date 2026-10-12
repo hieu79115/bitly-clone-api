@@ -23,6 +23,7 @@ import java.security.Principal;
 import java.util.List;
 
 import com.thinh.shortener.exception.ResourceNotFoundException;
+import com.thinh.shortener.exception.UrlDisabledException;
 import com.thinh.shortener.exception.UrlExpiredException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.StringUtils;
@@ -60,6 +61,13 @@ public class UrlController {
             // Return HTTP Status 302 (FOUND) to instruct the browser to automatically redirect to the original page.
             return ResponseEntity.status(HttpStatus.FOUND)
                     .location(URI.create(originalUrl))
+                    .build();
+        } catch (UrlDisabledException ex) {
+            String redirectUrl = StringUtils.hasText(frontendUrl)
+                    ? frontendUrl + "/link-disabled?code=" + shortCode
+                    : "/link-disabled";
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .location(URI.create(redirectUrl))
                     .build();
         } catch (UrlExpiredException ex) {
             String redirectUrl = StringUtils.hasText(frontendUrl)

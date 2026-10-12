@@ -42,6 +42,10 @@ public class Url {
     @Column(name = "expires_at")
     private LocalDateTime expiresAt;
 
+    @Column(name = "is_active", nullable = false, columnDefinition = "boolean default true")
+    @Builder.Default
+    private Boolean isActive = true;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;

@@ -9,6 +9,7 @@ import com.thinh.shortener.domain.entity.User;
 import com.thinh.shortener.domain.mapper.UrlMapper;
 import com.thinh.shortener.exception.AliasAlreadyExistsException;
 import com.thinh.shortener.exception.ResourceNotFoundException;
+import com.thinh.shortener.exception.UrlDisabledException;
 import com.thinh.shortener.exception.UrlExpiredException;
 import com.thinh.shortener.repository.TagRepository;
 import com.thinh.shortener.repository.UrlRepository;
@@ -122,6 +123,16 @@ public class UrlServiceImpl implements UrlService {
         log.debug("Cache miss for shortCode: {}, querying database", shortCode);
         Url url = urlRepository.findByShortCode(shortCode)
                 .orElseThrow(() -> new ResourceNotFoundException("URL not found or has been deleted"));
+
+        if (Boolean.FALSE.equals(url.getIsActive())) {
+            log.warn("Attempted to access disabled link: shortCode={}", shortCode);
+            throw new UrlDisabledException("This link has been disabled due to safety or policy violations.");
+        }
+
+        if (url.getUser() != null && Boolean.FALSE.equals(url.getUser().getIsActive())) {
+            log.warn("Attempted to access link belonging to suspended user: shortCode={}", shortCode);
+            throw new UrlDisabledException("This link is unavailable because the owner account has been suspended.");
+        }
 
         if (url.getExpiresAt() != null) {
             long remainingSeconds = Duration.between(LocalDateTime.now(), url.getExpiresAt()).getSeconds();

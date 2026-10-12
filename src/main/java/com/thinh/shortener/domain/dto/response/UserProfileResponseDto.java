@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -19,6 +20,9 @@ public class UserProfileResponseDto {
     private String bio;
     private String phoneNumber;
     private String company;
+
+    private List<String> roles;
+    private List<String> permissions;
 
     private long totalUrls;
     private long totalClicks;

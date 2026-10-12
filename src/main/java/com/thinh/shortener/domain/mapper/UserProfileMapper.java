@@ -11,5 +11,7 @@ public interface UserProfileMapper {
     @Mapping(target = "email", source = "user.email")
     @Mapping(target = "totalUrls", ignore = true)
     @Mapping(target = "totalClicks", ignore = true)
+    @Mapping(target = "roles", ignore = true)
+    @Mapping(target = "permissions", ignore = true)
     UserProfileResponseDto toDto(UserProfile profile);
 }

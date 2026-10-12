@@ -44,6 +44,9 @@ class AuthServiceImplTest {
     private UserRepository userRepository;
 
     @Mock
+    private com.thinh.shortener.repository.RoleRepository roleRepository;
+
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     @Mock
