@@ -46,6 +46,9 @@ public class AdminServiceImpl implements AdminService {
     @Value("${app.domain}")
     private String appDomain;
 
+    @Value("${app.root-admin.email:root@app.local}")
+    private String rootAdminEmail;
+
     @Override
     @Transactional(readOnly = true)
     public AdminStatsResponseDto getStats() {
@@ -149,9 +152,10 @@ public class AdminServiceImpl implements AdminService {
             if (user.getEmail().equalsIgnoreCase(currentAdminEmail) && !request.getIsActive()) {
                 throw new IllegalArgumentException("Action rejected: You cannot deactivate your own account.");
             }
+            boolean isRootOwner = user.getEmail().equalsIgnoreCase(rootAdminEmail);
             boolean isSuperAdmin = user.getRoles().stream().anyMatch(r -> "SUPER_ADMIN".equalsIgnoreCase(r.getName()));
-            if (isSuperAdmin && !request.getIsActive()) {
-                throw new IllegalArgumentException("Action rejected: Super Admin accounts cannot be deactivated.");
+            if ((isRootOwner || isSuperAdmin) && !request.getIsActive()) {
+                throw new IllegalArgumentException("Action rejected: The Root Super Admin account cannot be deactivated.");
             }
             user.setIsActive(request.getIsActive());
 
@@ -170,6 +174,11 @@ public class AdminServiceImpl implements AdminService {
     public void resetUserPassword(Long id, AdminResetPasswordRequestDto request, String currentAdminEmail) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+
+        boolean isTargetRootOwner = user.getEmail().equalsIgnoreCase(rootAdminEmail);
+        if (isTargetRootOwner && !currentAdminEmail.equalsIgnoreCase(rootAdminEmail)) {
+            throw new IllegalArgumentException("Action rejected: Only the Root Owner can reset the password of the Root Super Admin account.");
+        }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword().trim()));
         userRepository.save(user);
@@ -267,10 +276,11 @@ public class AdminServiceImpl implements AdminService {
             throw new IllegalArgumentException("Action rejected: You cannot deactivate your own account.");
         }
 
-        // Super Admin protection
+        // Root Owner & Super Admin protection
+        boolean isRootOwner = user.getEmail().equalsIgnoreCase(rootAdminEmail);
         boolean isSuperAdmin = user.getRoles().stream().anyMatch(r -> "SUPER_ADMIN".equalsIgnoreCase(r.getName()));
-        if (isSuperAdmin && !request.getIsActive()) {
-            throw new IllegalArgumentException("Action rejected: Super Admin accounts cannot be deactivated.");
+        if ((isRootOwner || isSuperAdmin) && !request.getIsActive()) {
+            throw new IllegalArgumentException("Action rejected: The Root Super Admin account cannot be deactivated.");
         }
 
         user.setIsActive(request.getIsActive());
@@ -304,13 +314,17 @@ public class AdminServiceImpl implements AdminService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
 
-        // Self-demotion prevention
-        boolean isCurrentlySuperAdmin = user.getRoles().stream().anyMatch(r -> "SUPER_ADMIN".equalsIgnoreCase(r.getName()));
-        if (user.getEmail().equalsIgnoreCase(currentAdminEmail) && isCurrentlySuperAdmin) {
-            boolean willKeepSuperAdmin = request.getRoleNames().stream().anyMatch("SUPER_ADMIN"::equalsIgnoreCase);
-            if (!willKeepSuperAdmin) {
-                throw new IllegalArgumentException("Action rejected: You cannot remove SUPER_ADMIN role from yourself.");
-            }
+        boolean isTargetRootOwner = user.getEmail().equalsIgnoreCase(rootAdminEmail);
+        boolean requestsSuperAdmin = request.getRoleNames().stream().anyMatch("SUPER_ADMIN"::equalsIgnoreCase);
+
+        // 1. Only Root Owner can hold SUPER_ADMIN
+        if (!isTargetRootOwner && requestsSuperAdmin) {
+            throw new IllegalArgumentException("Action rejected: The SUPER_ADMIN role is strictly reserved for the Root Owner (" + rootAdminEmail + ").");
+        }
+
+        // 2. Root Owner must always retain SUPER_ADMIN
+        if (isTargetRootOwner && !requestsSuperAdmin) {
+            throw new IllegalArgumentException("Action rejected: The Root Owner must retain the SUPER_ADMIN role.");
         }
 
         List<Role> matchedRoles = roleRepository.findByNameIn(request.getRoleNames());
@@ -479,7 +493,8 @@ public class AdminServiceImpl implements AdminService {
 
         Set<Permission> permissions = new HashSet<>();
         if (request.getPermissionNames() != null && !request.getPermissionNames().isEmpty()) {
-            permissions.addAll(permissionRepository.findByNameIn(request.getPermissionNames()));
+            Set<String> normalized = enforcePermissionDependencies(request.getPermissionNames());
+            permissions.addAll(permissionRepository.findByNameIn(normalized));
         }
 
         Role role = Role.builder()
@@ -528,7 +543,8 @@ public class AdminServiceImpl implements AdminService {
                 throw new IllegalArgumentException("Cannot modify permissions of the root SUPER_ADMIN role.");
             }
 
-            List<Permission> matched = permissionRepository.findByNameIn(request.getPermissionNames());
+            Set<String> normalized = enforcePermissionDependencies(request.getPermissionNames());
+            List<Permission> matched = permissionRepository.findByNameIn(normalized);
             role.setPermissions(new HashSet<>(matched));
         }
 
@@ -572,5 +588,20 @@ public class AdminServiceImpl implements AdminService {
 
         roleRepository.delete(role);
         log.info("Deleted custom role id={} name={}", roleId, role.getName());
+    }
+
+    private Set<String> enforcePermissionDependencies(Collection<String> permissionNames) {
+        if (permissionNames == null) return new HashSet<>();
+        Set<String> perms = new HashSet<>(permissionNames);
+        if (perms.contains("USER_MANAGE")) {
+            perms.add("USER_READ");
+        }
+        if (perms.contains("URL_DISABLE") || perms.contains("URL_DELETE")) {
+            perms.add("URL_READ");
+        }
+        if (perms.contains("ROLE_MANAGE")) {
+            perms.add("ROLE_READ");
+        }
+        return perms;
     }
 }

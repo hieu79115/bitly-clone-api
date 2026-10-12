@@ -26,10 +26,22 @@ public class RbacDataInitializer implements CommandLineRunner {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
+    @org.springframework.beans.factory.annotation.Value("${app.root-admin.email:root@app.local}")
+    private String rootAdminEmail;
+
+    @org.springframework.beans.factory.annotation.Value("${app.root-admin.password:AdminPassword@123}")
+    private String rootAdminPassword;
+
+    @org.springframework.beans.factory.annotation.Value("${app.root-admin.reset-password:false}")
+    private boolean resetRootAdminPassword;
+
     @Override
     @Transactional
     public void run(String... args) {
         log.info("Checking and initializing Dynamic RBAC permissions and roles...");
+
+        // 0. Cleanup deprecated permissions
+        cleanupDeprecatedPermissions();
 
         // 1. Initialize Permissions
         Map<String, Permission> permissions = initializePermissions();
@@ -46,6 +58,19 @@ public class RbacDataInitializer implements CommandLineRunner {
         log.info("Dynamic RBAC initialization completed successfully.");
     }
 
+    private void cleanupDeprecatedPermissions() {
+        permissionRepository.findByName("USER_DELETE").ifPresent(delPerm -> {
+            List<Role> roles = roleRepository.findAllWithPermissions();
+            for (Role role : roles) {
+                if (role.getPermissions() != null && role.getPermissions().remove(delPerm)) {
+                    roleRepository.save(role);
+                }
+            }
+            permissionRepository.delete(delPerm);
+            log.info("Cleaned up deprecated permission USER_DELETE from database.");
+        });
+    }
+
     private Map<String, Permission> initializePermissions() {
         Map<String, Permission> result = new HashMap<>();
 
@@ -54,7 +79,6 @@ public class RbacDataInitializer implements CommandLineRunner {
                 // USER Module
                 new String[]{"USER_READ", "USER", "View user accounts and profiles"},
                 new String[]{"USER_MANAGE", "USER", "Update user status, activate, or deactivate users"},
-                new String[]{"USER_DELETE", "USER", "Delete user accounts"},
 
                 // URL Module
                 new String[]{"URL_READ", "URL", "View all short links across the platform"},
@@ -156,13 +180,11 @@ public class RbacDataInitializer implements CommandLineRunner {
     }
 
     private void initializeRootSuperAdmin(Role superAdminRole) {
-        String rootEmail = "root@app.local";
-
-        Optional<User> existing = userRepository.findByEmail(rootEmail);
+        Optional<User> existing = userRepository.findByEmail(rootAdminEmail);
         if (existing.isEmpty()) {
             User root = User.builder()
-                    .email(rootEmail)
-                    .password(passwordEncoder.encode("AdminPassword@123"))
+                    .email(rootAdminEmail)
+                    .password(passwordEncoder.encode(rootAdminPassword))
                     .isActive(true)
                     .role("ROLE_ADMIN")
                     .roles(new HashSet<>(Collections.singletonList(superAdminRole)))
@@ -171,18 +193,43 @@ public class RbacDataInitializer implements CommandLineRunner {
             UserProfile profile = UserProfile.builder()
                     .user(root)
                     .fullName("Root Administrator")
-                    .bio("Master System Administrator")
+                    .bio("Master System Administrator (Root Owner)")
                     .build();
             root.setProfile(profile);
 
             userRepository.save(root);
-            log.info("Default Root SuperAdmin account initialized: email={}", rootEmail);
+            log.info("Default Root SuperAdmin account initialized: email={}", rootAdminEmail);
         } else {
             User root = existing.get();
-            if (root.getRoles() == null || root.getRoles().isEmpty()) {
-                root.setRoles(new HashSet<>(Collections.singletonList(superAdminRole)));
+            boolean needSave = false;
+
+            if (root.getRoles() == null || !root.getRoles().contains(superAdminRole)) {
+                if (root.getRoles() == null) root.setRoles(new HashSet<>());
+                root.getRoles().add(superAdminRole);
+                needSave = true;
+                log.info("Ensured Root account has SUPER_ADMIN role.");
+            }
+
+            if (resetRootAdminPassword) {
+                root.setPassword(passwordEncoder.encode(rootAdminPassword));
+                needSave = true;
+                log.warn("SECURITY NOTICE: Root SuperAdmin password has been forcibly reset from config/env: email={}", rootAdminEmail);
+            }
+
+            if (needSave) {
                 userRepository.save(root);
-                log.info("Updated existing Root account with SUPER_ADMIN role.");
+            }
+        }
+
+        // Strictly enforce ONLY 1 Superadmin: demote any other user that might have been granted SUPER_ADMIN
+        List<User> allUsers = userRepository.findAll();
+        for (User u : allUsers) {
+            if (!u.getEmail().equalsIgnoreCase(rootAdminEmail) && u.getRoles() != null) {
+                boolean hadSuperAdmin = u.getRoles().removeIf(r -> "SUPER_ADMIN".equalsIgnoreCase(r.getName()));
+                if (hadSuperAdmin) {
+                    userRepository.save(u);
+                    log.warn("Demoted unauthorized user [{}] from SUPER_ADMIN role (only [{}] is Root Owner).", u.getEmail(), rootAdminEmail);
+                }
             }
         }
     }

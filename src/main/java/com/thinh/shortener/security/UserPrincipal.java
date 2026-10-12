@@ -45,7 +45,7 @@ public class UserPrincipal implements UserDetails {
         // If the user has SUPER_ADMIN role, guarantee they have all permissions
         if (roleNames.contains("SUPER_ADMIN")) {
             for (String p : java.util.List.of(
-                    "USER_READ", "USER_MANAGE", "USER_DELETE",
+                    "USER_READ", "USER_MANAGE",
                     "URL_READ", "URL_DISABLE", "URL_DELETE",
                     "ANALYTICS_READ",
                     "ROLE_READ", "ROLE_MANAGE"

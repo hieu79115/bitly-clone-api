@@ -59,7 +59,7 @@ public class ProfileServiceImpl implements ProfileService {
                     .toList());
             if (roleNames.contains("SUPER_ADMIN")) {
                 perms.addAll(List.of(
-                        "USER_READ", "USER_MANAGE", "USER_DELETE",
+                        "USER_READ", "USER_MANAGE",
                         "URL_READ", "URL_DISABLE", "URL_DELETE",
                         "ANALYTICS_READ",
                         "ROLE_READ", "ROLE_MANAGE"
