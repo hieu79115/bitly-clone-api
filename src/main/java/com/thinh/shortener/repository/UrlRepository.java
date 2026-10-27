@@ -28,5 +28,12 @@ public interface UrlRepository extends JpaRepository<Url, Long>, JpaSpecificatio
     @Query("SELECT COALESCE(SUM(u.clickCount), 0) FROM Url u WHERE u.user.id = :userId")
     long sumClickCountByUserId(@Param("userId") Long userId);
 
+    @Query("SELECT COALESCE(SUM(u.clickCount), 0) FROM Url u")
+    long sumAllClickCount();
+
+    long countByIsActiveTrue();
+
+    long countByIsActiveFalse();
+
     List<Url> findTop5ByUserIdOrderByClickCountDesc(Long userId);
 }

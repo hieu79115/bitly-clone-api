@@ -76,6 +76,12 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.GONE);
     }
 
+    @ExceptionHandler(UrlDisabledException.class)
+    public ResponseEntity<ErrorResponse> handleUrlDisabledException(UrlDisabledException ex) {
+        ErrorResponse error = new ErrorResponse(HttpStatus.FORBIDDEN.value(), ex.getMessage(), LocalDateTime.now(), null);
+        return new ResponseEntity<>(error, HttpStatus.FORBIDDEN);
+    }
+
     @ExceptionHandler({BadCredentialsException.class, AuthenticationException.class})
     public ResponseEntity<ErrorResponse> handleAuthenticationException(Exception ex) {
         log.warn("Authentication failure: {}", ex.getMessage());

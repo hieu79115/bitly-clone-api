@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -16,4 +18,7 @@ public class AuthResponseDto {
     @Builder.Default
     private String tokenType = "Bearer";
     private String email;
+
+    private List<String> roles;
+    private List<String> permissions;
 }

@@ -3,6 +3,8 @@ package com.thinh.shortener.service.impl;
 import com.thinh.shortener.domain.dto.request.ChangePasswordRequestDto;
 import com.thinh.shortener.domain.dto.request.UpdateProfileRequestDto;
 import com.thinh.shortener.domain.dto.response.UserProfileResponseDto;
+import com.thinh.shortener.domain.entity.Permission;
+import com.thinh.shortener.domain.entity.Role;
 import com.thinh.shortener.domain.entity.User;
 import com.thinh.shortener.domain.entity.UserProfile;
 import com.thinh.shortener.domain.mapper.UserProfileMapper;
@@ -18,6 +20,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -32,7 +39,8 @@ public class ProfileServiceImpl implements ProfileService {
     @Override
     @Transactional
     public UserProfileResponseDto getProfile(String email) {
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findByEmailWithRolesAndPermissions(email)
+                .or(() -> userRepository.findByEmail(email))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         UserProfile profile = userProfileRepository.findByUserId(user.getId())
@@ -41,6 +49,24 @@ public class ProfileServiceImpl implements ProfileService {
         UserProfileResponseDto response = userProfileMapper.toDto(profile);
         response.setTotalUrls(urlRepository.countByUserId(user.getId()));
         response.setTotalClicks(urlRepository.sumClickCountByUserId(user.getId()));
+
+        if (user.getRoles() != null) {
+            List<String> roleNames = user.getRoles().stream().map(Role::getName).toList();
+            response.setRoles(roleNames);
+            Set<String> perms = new HashSet<>(user.getRoles().stream()
+                    .flatMap(r -> r.getPermissions().stream())
+                    .map(Permission::getName)
+                    .toList());
+            if (roleNames.contains("SUPER_ADMIN")) {
+                perms.addAll(List.of(
+                        "USER_READ", "USER_MANAGE",
+                        "URL_READ", "URL_DISABLE", "URL_DELETE",
+                        "ANALYTICS_READ",
+                        "ROLE_READ", "ROLE_MANAGE"
+                ));
+            }
+            response.setPermissions(new ArrayList<>(perms));
+        }
 
         log.debug("Retrieved profile for user: {}", email);
         return response;
@@ -67,6 +93,15 @@ public class ProfileServiceImpl implements ProfileService {
         UserProfileResponseDto response = userProfileMapper.toDto(profile);
         response.setTotalUrls(urlRepository.countByUserId(user.getId()));
         response.setTotalClicks(urlRepository.sumClickCountByUserId(user.getId()));
+
+        if (user.getRoles() != null) {
+            response.setRoles(user.getRoles().stream().map(r -> r.getName()).toList());
+            response.setPermissions(user.getRoles().stream()
+                    .flatMap(r -> r.getPermissions().stream())
+                    .map(p -> p.getName())
+                    .distinct()
+                    .toList());
+        }
 
         return response;
     }

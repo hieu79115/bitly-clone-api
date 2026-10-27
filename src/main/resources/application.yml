@@ -39,6 +39,10 @@ server:
   port: ${PORT:8080}
 
 app:
+  root-admin:
+    email: ${ROOT_ADMIN_EMAIL:root@app.local}
+    password: ${ROOT_ADMIN_PASSWORD:AdminPassword@123}
+    reset-password: ${ROOT_ADMIN_RESET_PASSWORD:false}
   domain: ${APP_DOMAIN:http://localhost:8080/}
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
   cors:
